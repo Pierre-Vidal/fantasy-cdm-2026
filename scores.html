@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐔 C'est quoi ce poulet ? — Scores par match</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .scores-wrap    { overflow-x: auto; }
+    .scores-table   { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .scores-table th,
+    .scores-table td { padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+    .scores-table thead th { background: var(--surface); position: sticky; top: 0; z-index: 2; font-weight: 700; font-size: 0.8rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+    .scores-table thead th.col-match { text-align: left; min-width: 220px; position: sticky; left: 0; z-index: 3; }
+    .col-match      { position: sticky; left: 0; background: var(--bg); z-index: 1; min-width: 220px; }
+    .scores-table tbody tr:hover td { background: var(--surface); }
+    .scores-table tbody tr:hover td.col-match { background: var(--surface); }
+    .round-header td { background: var(--surface) !important; color: var(--muted); font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: .06em; padding: 6px 10px; }
+    .score-cell     { text-align: center; cursor: pointer; transition: background .15s; }
+    .score-cell:hover { background: var(--accent)18 !important; }
+    .score-val      { font-weight: 800; font-size: 1rem; }
+    .total-row td   { border-top: 2px solid var(--border); font-weight: 800; background: var(--surface); }
+
+    /* Tooltip flottant */
+    #score-tip {
+      display: none;
+      position: fixed;
+      z-index: 9999;
+      width: 280px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px;
+      box-shadow: 0 12px 32px rgba(0,0,0,.5);
+      font-size: 0.8rem;
+      pointer-events: none;
+    }
+    .tip-player     { display: flex; justify-content: space-between; align-items: baseline; gap: 6px; margin-bottom: 4px; }
+    .tip-nom        { font-weight: 600; flex: 1; }
+    .tip-pts        { font-weight: 700; white-space: nowrap; }
+    .tip-detail     { color: var(--muted); font-size: 0.72rem; padding: 2px 0 8px 0; border-bottom: 1px solid var(--border)44; margin-bottom: 6px; }
+    .tip-detail:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+  </style>
+</head>
+<body>
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">📋 Scores par match</div>
+    <div class="page-subtitle">Points gagnés par chaque équipe — survole ou clique une cellule pour le détail</div>
+  </div>
+  <div id="content">
+    <div class="empty-state"><div class="spinner"></div></div>
+  </div>
+</div>
+
+<!-- Tooltip flottant -->
+<div id="score-tip"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/scores.js"></script>
+</body>
+</html>

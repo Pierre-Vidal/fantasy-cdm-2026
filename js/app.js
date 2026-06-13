@@ -48,6 +48,7 @@ function buildNav(activePage) {
       <div class="nav-links">
         <a href="index.html" class="${activePage === 'classement' ? 'active' : ''}">🏆 Classement</a>
         ${monEquipeLink}
+        <a href="scores.html" class="${activePage === 'scores' ? 'active' : ''}">📋 Scores</a>
         <a href="tournoi.html" class="${activePage === 'tournoi' ? 'active' : ''}">🌍 Tournoi</a>
         <a href="graphiques.html" class="${activePage === 'graphiques' ? 'active' : ''}">📊 Stats</a>
         <a href="admin.html" class="${activePage === 'admin' ? 'active' : ''}">⚙️</a>
