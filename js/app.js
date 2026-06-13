@@ -2,14 +2,29 @@
 // app.js — Client Supabase partagé + utilitaires communs
 // ============================================================
 
-const { createClient } = window.supabase;
-const db = createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+// var (pas const/let) pour éviter le TDZ si le CDN est lent
+var db = null;
+(function () {
+  if (typeof supabase === 'undefined') {
+    console.error('Supabase CDN non chargé — vérifie ta connexion internet');
+    return;
+  }
+  if (!CONFIG || CONFIG.SUPABASE_URL === 'REMPLACE_PAR_TON_URL') {
+    console.warn('config.js non configuré — remplis SUPABASE_URL et SUPABASE_ANON_KEY');
+    return;
+  }
+  try {
+    db = supabase.createClient(CONFIG.SUPABASE_URL, CONFIG.SUPABASE_ANON_KEY);
+  } catch (e) {
+    console.error('Erreur init Supabase :', e);
+  }
+})();
 
 // ── Admin : client avec service key (entré manuellement) ────
 function getAdminDb() {
   const key = sessionStorage.getItem('admin_service_key');
   if (!key) return null;
-  return createClient(CONFIG.SUPABASE_URL, key);
+  return supabase.createClient(CONFIG.SUPABASE_URL, key);
 }
 
 // ── Mon équipe (localStorage) ─────────────────────────────

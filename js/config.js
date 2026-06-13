@@ -3,8 +3,8 @@
 // Settings > API > Project URL + anon public key
 // ============================================================
 const CONFIG = {
-  SUPABASE_URL:      'REMPLACE_PAR_TON_URL',        // ex: https://xxxx.supabase.co
-  SUPABASE_ANON_KEY: 'REMPLACE_PAR_TON_ANON_KEY',   // clé publique (safe à exposer)
+  SUPABASE_URL:      'https://ispatiztwraeguvakwkl.supabase.co',
+  SUPABASE_ANON_KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlzcGF0aXp0d3JhZWd1dmFrd2tsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODEzNDEwODUsImV4cCI6MjA5NjkxNzA4NX0.73H8ADdPcEdGPjFH9O6FWr_VwCMXGKLMtZawoAm6trI',
 
   BUDGET_MAX:    110,
   NB_JOUEURS:    15,
