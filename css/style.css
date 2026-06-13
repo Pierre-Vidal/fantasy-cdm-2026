@@ -229,6 +229,67 @@ label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4
 .slot-remove:hover { background: var(--red); border-color: var(--red); color: #fff; }
 .slot-empty { color: var(--muted); font-size: 0.8rem; }
 
+/* ── Terrain de coach (création d'équipe) ────────────────── */
+.pitch-coach {
+  background: linear-gradient(to bottom,
+    #1a4a1a 0%, #1e5c1e 12.5%, #1a4a1a 25%,
+    #1e5c1e 37.5%, #1a4a1a 50%, #1e5c1e 62.5%,
+    #1a4a1a 75%, #1e5c1e 87.5%, #1a4a1a 100%);
+  border-radius: var(--radius); border: 2px solid #2d7a2d;
+  padding: 14px 8px; display: flex; flex-direction: column;
+  gap: 10px; margin-top: 10px; position: relative;
+}
+.pitch-coach::before {
+  content: ''; position: absolute; top: 50%; left: 10%; right: 10%;
+  height: 1px; background: rgba(255,255,255,0.15); pointer-events: none;
+}
+.coach-row { display: flex; justify-content: space-evenly; gap: 4px; }
+.coach-slot {
+  display: flex; flex-direction: column; align-items: center; gap: 3px;
+  width: 56px; cursor: pointer;
+}
+.coach-avatar {
+  width: 44px; height: 44px; border-radius: 50%;
+  border: 2px dashed rgba(255,255,255,0.3);
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s; position: relative; overflow: hidden;
+  background: rgba(0,0,0,0.25);
+}
+.coach-slot.filled .coach-avatar {
+  border-style: solid; border-color: var(--slot-color, #fff);
+}
+.coach-slot.filled .coach-avatar:hover {
+  border-color: var(--red); transform: scale(1.05);
+}
+.coach-slot.filled .coach-avatar:hover::after {
+  content: '×'; position: absolute; inset: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 1.4rem; font-weight: 900; color: var(--red);
+  background: rgba(0,0,0,0.55);
+}
+.coach-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.coach-initials {
+  width: 100%; height: 100%; display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 0.8rem; color: var(--slot-color, rgba(255,255,255,0.5));
+}
+.coach-pos-icon {
+  font-size: 1.1rem; color: rgba(255,255,255,0.25);
+}
+.coach-name {
+  font-size: 0.58rem; font-weight: 700; color: #fff;
+  text-align: center; max-width: 56px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+}
+.coach-val {
+  font-size: 0.55rem; color: rgba(255,255,255,0.7);
+  background: rgba(0,0,0,0.4); border-radius: 8px; padding: 0 4px;
+}
+.coach-pos-label {
+  font-size: 0.52rem; font-weight: 800; letter-spacing: 0.5px;
+  padding: 1px 5px; border-radius: 8px; color: #fff;
+}
+
 /* ── Tournoi ─────────────────────────────────────────────── */
 .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid var(--border); padding-bottom: -1px; }
 .tab-btn {

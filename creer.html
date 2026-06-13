@@ -51,10 +51,13 @@
         </div>
       </div>
 
-      <!-- Droite : équipe + budget -->
+      <!-- Droite : terrain de coach -->
       <div class="team-panel">
         <div class="card">
-          <div class="card-title">Mon équipe</div>
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+            <div class="card-title" style="margin:0">Mon équipe</div>
+            <div style="font-size:0.8rem;font-weight:700" id="joueurs-count">0 / 15</div>
+          </div>
 
           <div class="budget-bar">
             <div class="budget-fill budget-ok" id="budget-fill" style="width:0%"></div>
@@ -64,13 +67,14 @@
             <span style="color:var(--muted)">/ 110 M$</span>
           </div>
 
-          <div class="compo-slots" id="compo-slots">
-            <!-- Rempli dynamiquement -->
+          <!-- Terrain interactif -->
+          <div id="pitch-coach" class="pitch-coach">
+            <!-- Rempli dynamiquement par JS -->
           </div>
 
-          <div id="validation-msg" style="font-size:0.8rem;color:var(--red);margin-bottom:12px;min-height:20px"></div>
+          <div id="validation-msg" style="font-size:0.8rem;color:var(--red);margin-top:10px;min-height:18px;text-align:center"></div>
 
-          <button class="btn btn-primary btn-block btn-lg" id="save-btn" disabled onclick="sauvegarder()">
+          <button class="btn btn-primary btn-block btn-lg" id="save-btn" disabled onclick="sauvegarder()" style="margin-top:10px">
             💾 Enregistrer mon équipe
           </button>
         </div>
