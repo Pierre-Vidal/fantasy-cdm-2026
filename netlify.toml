@@ -1,7 +1,14 @@
+[build]
+  publish = "."
+
+[functions]
+  directory = "netlify/functions"
+  node_bundler = "esbuild"
+
+[functions."sync"]
+  schedule = "0 * * * *"
+
 [[redirects]]
   from = "/*"
   to = "/:splat"
   status = 200
-
-[build]
-  publish = "."
