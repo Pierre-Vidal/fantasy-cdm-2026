@@ -16,6 +16,23 @@
     <div class="page-subtitle">Réservé à l'admin du tournoi</div>
   </div>
 
+  <!-- Accès rapide admin (mot de passe simple) -->
+  <div class="card" style="max-width:480px;margin-bottom:24px">
+    <div class="card-title">🔐 Accès rapide</div>
+    <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+      Mot de passe admin pour gérer les équipes sans la clé Supabase.
+    </p>
+    <div style="display:flex;gap:8px;margin-bottom:12px">
+      <input type="password" id="admin-pwd" placeholder="Mot de passe admin" style="flex:1"
+             onkeydown="if(event.key==='Enter') connecterRapide()">
+      <button class="btn btn-primary" onclick="connecterRapide()">Connexion</button>
+    </div>
+    <div id="rapide-panel" style="display:none">
+      <div style="font-size:0.8rem;color:var(--green);margin-bottom:10px">✓ Connecté</div>
+      <div id="rapide-equipes" style="font-size:0.875rem"></div>
+    </div>
+  </div>
+
   <!-- Auth -->
   <div id="auth-section" class="card" style="max-width:520px;margin-bottom:24px">
     <div class="card-title">🔑 Connexion admin</div>

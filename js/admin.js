@@ -311,6 +311,54 @@ async function supprimerToutesLesEquipes() {
   } catch(e) { showToast(e.message, 'error'); }
 }
 
+// ── Accès rapide (mot de passe simple) ───────────────────────
+async function adminAction(action, params) {
+  const password = document.getElementById('admin-pwd').value;
+  const res = await fetch('/.netlify/functions/admin-action', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ action, password, params }),
+  });
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.error || 'Erreur serveur');
+  return data;
+}
+
+async function connecterRapide() {
+  try {
+    const { equipes } = await adminAction('list_equipes', {});
+    document.getElementById('rapide-panel').style.display = 'block';
+    afficherEquipesRapide(equipes);
+  } catch(e) {
+    showToast(e.message, 'error');
+    document.getElementById('rapide-panel').style.display = 'none';
+  }
+}
+
+function afficherEquipesRapide(equipes) {
+  const el = document.getElementById('rapide-equipes');
+  if (!equipes || equipes.length === 0) { el.innerHTML = '<em style="color:var(--muted)">Aucune équipe</em>'; return; }
+  el.innerHTML = equipes.map(e => `
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:7px 0;border-bottom:1px solid var(--border)33">
+      <div>
+        <span style="font-weight:600">${esc(e.nom)}</span>
+        <span style="font-size:0.72rem;color:var(--muted);margin-left:8px">${new Date(e.created_at).toLocaleDateString('fr-FR')}</span>
+      </div>
+      <button class="btn btn-danger btn-sm" onclick="supprimerEquipeRapide('${e.id}','${esc(e.nom)}')">🗑️ Supprimer</button>
+    </div>`).join('');
+}
+
+async function supprimerEquipeRapide(id, nom) {
+  if (!confirm(`Supprimer l'équipe "${nom}" ? Ses points seront aussi supprimés.`)) return;
+  try {
+    await adminAction('delete_equipe', { equipe_id: id });
+    showToast(`"${nom}" supprimée ✓`, 'success');
+    connecterRapide(); // rafraîchit la liste
+  } catch(e) {
+    showToast(e.message, 'error');
+  }
+}
+
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
