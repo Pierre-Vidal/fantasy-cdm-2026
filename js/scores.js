@@ -45,10 +45,10 @@ async function init() {
       })
     );
 
-    // ── Filtre les matchs terminés avec des stats ─────────────
-    const doneFixtures = fixtures.filter(f => f.status === 'FT' && grid[f.id]);
+    // ── Filtre les matchs terminés (même sans points) ─────────
+    const doneFixtures = fixtures.filter(f => f.status === 'FT');
     if (doneFixtures.length === 0) {
-      content.innerHTML = '<div class="empty-state">Aucun score disponible — les matchs terminés apparaîtront ici.</div>';
+      content.innerHTML = '<div class="empty-state">Aucun match terminé pour le moment.</div>';
       return;
     }
 
