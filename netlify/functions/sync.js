@@ -167,6 +167,9 @@ exports.handler = async function () {
     }
 
     // ── Étape 3 : Stats + points par match ───────────────────
+    // Charge les IDs valides : seuls les joueurs du fantasy pool ont une FK dans stats
+    const joueurRows    = await sbSelect('joueurs', 'id', null, 2000);
+    const joueurIds     = new Set(joueurRows.map(j => j.id));
     const equipeJoueurs = await sbSelect('equipe_joueurs', 'equipe_id,joueur_id');
 
     for (const fixture of toProcess) {
@@ -217,11 +220,13 @@ exports.handler = async function () {
           });
         });
 
-        await sbInsert('stats', statsRows);
+        // Filtre les joueurs absents de la table joueurs (FK constraint)
+        const filteredStats = statsRows.filter(s => joueurIds.has(s.joueur_id));
+        await sbInsert('stats', filteredStats);
 
-        // Points : croise stats × equipe_joueurs
+        // Points : croise stats filtrées × equipe_joueurs
         const pointsRows = [];
-        statsRows.forEach(stat => {
+        filteredStats.forEach(stat => {
           const poste = posteMap[stat.joueur_id] || 'MIL';
           const { points, detail } = calculerPoints(poste, stat);
 
