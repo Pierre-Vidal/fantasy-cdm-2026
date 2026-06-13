@@ -1,0 +1,132 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐔 Admin — C'est quoi ce poulet ?</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">⚙️ Administration</div>
+    <div class="page-subtitle">Réservé à l'admin du tournoi</div>
+  </div>
+
+  <!-- Auth -->
+  <div id="auth-section" class="card" style="max-width:520px;margin-bottom:24px">
+    <div class="card-title">🔑 Connexion admin</div>
+    <p style="font-size:0.875rem;color:var(--muted);margin-bottom:16px">
+      Entre ta <strong>Service Role Key</strong> Supabase (Settings → API → service_role).
+      Elle reste uniquement dans ton navigateur (sessionStorage).
+    </p>
+    <div class="form-group key-input-wrap">
+      <label>Service Role Key</label>
+      <input type="password" id="service-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9…">
+      <span class="key-status" id="key-status"></span>
+    </div>
+    <button class="btn btn-primary" onclick="connecterAdmin()">🔓 Connecter</button>
+    <button class="btn btn-secondary" style="margin-left:8px" onclick="deconnecter()">Déconnecter</button>
+  </div>
+
+  <!-- Panneau admin (caché avant auth) -->
+  <div id="admin-panel" style="display:none">
+
+    <!-- Stats rapides -->
+    <div id="stats-rapides" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap"></div>
+
+    <div class="admin-grid">
+
+      <!-- Import joueurs -->
+      <div class="card">
+        <div class="card-title">📥 Importer les joueurs</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          JSON exporté depuis Apps Script (<code>exporterDonneesJSON()</code>).
+          Colle le contenu du champ <code>joueurs</code>.
+        </p>
+        <div class="form-group">
+          <label>JSON joueurs (tableau d'objets)</label>
+          <textarea id="json-joueurs" rows="6" placeholder='[{"id":1,"nom":"Mbappé","poste":"ATT","nation":"France","valeur":15}]'></textarea>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="importerJoueurs()">📥 Importer joueurs</button>
+      </div>
+
+      <!-- Import équipes -->
+      <div class="card">
+        <div class="card-title">👥 Importer les équipes</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          JSON du champ <code>equipes</code> de <code>exporterDonneesJSON()</code>.
+        </p>
+        <div class="form-group">
+          <label>JSON équipes</label>
+          <textarea id="json-equipes" rows="6" placeholder='[{"nom":"Les Poulets","joueurs":[{"id":1,"nom":"Mbappé","poste":"ATT","valeur":15}]}]'></textarea>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="importerEquipes()">📥 Importer équipes</button>
+      </div>
+
+      <!-- Import fixtures -->
+      <div class="card">
+        <div class="card-title">🌍 Importer les fixtures</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          JSON du champ <code>fixtures</code> de <code>exporterDonneesJSON()</code>.
+        </p>
+        <div class="form-group">
+          <label>JSON fixtures</label>
+          <textarea id="json-fixtures" rows="6" placeholder='[{"id":1234,"round":"Group Stage - A","date_heure":"2026-06-11T18:00:00Z",...}]'></textarea>
+        </div>
+        <button class="btn btn-primary btn-block" onclick="importerFixtures()">📥 Importer fixtures</button>
+      </div>
+
+      <!-- Calcul des points -->
+      <div class="card">
+        <div class="card-title">⭐ Calculer les points</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          Calcule les points de tous les joueurs depuis leurs stats et les distribue à chaque équipe.
+          À lancer après chaque journée de matchs.
+        </p>
+        <button class="btn btn-primary btn-block" onclick="calculerTousLesPoints()">⭐ Calculer les points</button>
+        <div id="points-log" style="margin-top:12px;font-size:0.78rem;color:var(--muted);font-family:monospace;max-height:120px;overflow:auto"></div>
+      </div>
+
+      <!-- Import stats (match) -->
+      <div class="card" style="grid-column: 1 / -1">
+        <div class="card-title">📊 Importer stats d'un match</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          JSON du champ <code>stats</code> de <code>exporterDonneesJSON()</code> — ou format :
+          <code>[{"fixture_id":1234,"joueur_id":1,"minutes":90,"buts":1,"passes":0,"clean_sheet":false,...}]</code>
+        </p>
+        <div class="form-group">
+          <label>JSON stats joueurs</label>
+          <textarea id="json-stats" rows="5" placeholder='[{"fixture_id":1234,"joueur_id":1,"minutes":90,"buts":1,"passes":0,"clean_sheet":false,"arrets":0,"jaune":false,"rouge":false,"csc":0,"buts_encaisses":0,"pen_arrete":false,"pen_manque":false}]'></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="importerStats()">📊 Importer stats</button>
+      </div>
+
+      <!-- Gestion équipes -->
+      <div class="card">
+        <div class="card-title">👥 Équipes inscrites</div>
+        <div id="liste-equipes" style="font-size:0.875rem;color:var(--muted)">Charge après connexion…</div>
+      </div>
+
+      <!-- Danger zone -->
+      <div class="card" style="border-color:var(--red)22">
+        <div class="card-title" style="color:var(--red)">⚠️ Zone dangereuse</div>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          <button class="btn btn-danger" onclick="supprimerTousLesPoints()">🗑️ Supprimer tous les points</button>
+          <button class="btn btn-danger" onclick="supprimerToutesLesEquipes()">💀 Supprimer toutes les équipes</button>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/admin.js"></script>
+</body>
+</html>

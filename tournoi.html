@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐔 C'est quoi ce poulet ? — Tournoi</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">🌍 Tournoi CDM 2026</div>
+    <div class="page-subtitle">48 équipes · 104 matchs</div>
+  </div>
+
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('groupes', this)">Phase de groupes</button>
+    <button class="tab-btn" onclick="switchTab('finale', this)">Phase finale</button>
+  </div>
+
+  <div id="tab-groupes" class="tab-content active">
+    <div id="groupes-content">
+      <div class="empty-state"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div></div>
+    </div>
+  </div>
+
+  <div id="tab-finale" class="tab-content">
+    <div id="finale-content">
+      <div class="empty-state"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div></div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/tournoi.js"></script>
+</body>
+</html>

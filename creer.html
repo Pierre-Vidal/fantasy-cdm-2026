@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐔 C'est quoi ce poulet ? — Créer mon équipe</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">➕ Créer mon équipe</div>
+    <div class="page-subtitle">GAR×2 · DEF×5 · MIL×5 · ATT×3 · Budget 110 M$</div>
+  </div>
+
+  <div id="inscription-closed" style="display:none" class="error-state" style="margin-bottom:20px">
+    🔒 L'inscription est fermée. Contacte l'admin pour plus d'infos.
+  </div>
+
+  <div id="already-registered" style="display:none" class="card" style="margin-bottom:20px;text-align:center">
+    <p style="margin-bottom:12px">Tu as déjà une équipe enregistrée 👌</p>
+    <a href="" id="mon-equipe-link" class="btn btn-primary">Voir mon équipe</a>
+  </div>
+
+  <div id="form-area">
+    <div class="form-group" style="max-width:400px;margin-bottom:24px">
+      <label for="pseudo">Ton pseudo / nom d'équipe</label>
+      <input type="text" id="pseudo" placeholder="Ex: Les Poulets Dorés" maxlength="40">
+    </div>
+
+    <div class="creer-layout">
+      <!-- Gauche : liste joueurs -->
+      <div>
+        <div class="card">
+          <div class="player-filters">
+            <button class="filter-btn active" data-pos="ALL">Tous</button>
+            <button class="filter-btn filter-GAR" data-pos="GAR">🧤 GAR</button>
+            <button class="filter-btn filter-DEF" data-pos="DEF">🛡️ DEF</button>
+            <button class="filter-btn filter-MIL" data-pos="MIL">⚙️ MIL</button>
+            <button class="filter-btn filter-ATT" data-pos="ATT">⚡ ATT</button>
+          </div>
+          <div style="margin-bottom:10px">
+            <input type="text" id="search" placeholder="🔍 Rechercher un joueur…">
+          </div>
+          <div id="player-list" class="player-list">
+            <div class="empty-state"><div class="spinner" style="width:24px;height:24px;border-width:2px"></div></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Droite : équipe + budget -->
+      <div class="team-panel">
+        <div class="card">
+          <div class="card-title">Mon équipe</div>
+
+          <div class="budget-bar">
+            <div class="budget-fill budget-ok" id="budget-fill" style="width:0%"></div>
+          </div>
+          <div class="budget-text">
+            <span id="budget-used">0 M$</span>
+            <span style="color:var(--muted)">/ 110 M$</span>
+          </div>
+
+          <div class="compo-slots" id="compo-slots">
+            <!-- Rempli dynamiquement -->
+          </div>
+
+          <div id="validation-msg" style="font-size:0.8rem;color:var(--red);margin-bottom:12px;min-height:20px"></div>
+
+          <button class="btn btn-primary btn-block btn-lg" id="save-btn" disabled onclick="sauvegarder()">
+            💾 Enregistrer mon équipe
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/creer.js"></script>
+</body>
+</html>
