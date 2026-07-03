@@ -16,15 +16,21 @@ async function init() {
   }
 
   try {
-    const [equipe, classement, butsMap, pointsData] = await Promise.all([
+    const [equipe, classementAll, equipesMeta, butsMap, pointsData] = await Promise.all([
       fetchEquipeComplete(id),
       fetchClassement(),
+      db.from('equipes').select('id, officiel').then(r => r.data || []),
       fetchButsEquipe(),
       db.from('points')
         .select('fixture_id, joueur_id, points, detail, fixtures(home_name, away_name, home_goals, away_goals, date_heure)')
         .eq('equipe_id', id)
         .then(r => r.data || []),
     ]);
+
+    const officielIds = new Set(equipesMeta.filter(e => e.officiel).map(e => e.id));
+    const estOfficiel  = officielIds.has(id);
+    const classement   = (estOfficiel ? classementAll.filter(e => officielIds.has(e.id)) : classementAll)
+      .map((e, i) => ({ ...e, rang: i + 1 }));
 
     const joueurs    = (equipe.equipe_joueurs || []).map(ej => ej.joueurs).filter(Boolean);
     const budgetUsed = Math.round(joueurs.reduce((s, j) => s + j.valeur, 0) * 10) / 10;
@@ -116,7 +122,14 @@ async function init() {
             <a href="index.html" style="color:var(--muted);font-size:0.875rem">← Classement</a>
           </div>
           <div class="page-title">${esc(equipe.nom)} ${isMe ? '<span style="font-size:1rem;font-weight:400;color:var(--accent)">(mon équipe)</span>' : ''}</div>
-          <div class="page-subtitle">Créée le ${new Date(equipe.created_at).toLocaleDateString('fr-FR')}</div>
+          <div class="page-subtitle" style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+            Créée le ${new Date(equipe.created_at).toLocaleDateString('fr-FR')}
+            <span style="font-size:0.68rem;font-weight:700;letter-spacing:.05em;padding:2px 9px;border-radius:999px;${estOfficiel
+              ? 'color:var(--green);background:rgba(63,185,80,.15);border:1px solid var(--green)'
+              : 'color:var(--muted);background:rgba(139,148,158,.15);border:1px solid var(--border)'}">
+              ${estOfficiel ? '✓ OFFICIELLE' : 'NON OFFICIELLE'}
+            </span>
+          </div>
         </div>
       </div>
 
