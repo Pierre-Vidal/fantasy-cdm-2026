@@ -2,56 +2,8 @@
 document.getElementById('nav-placeholder').innerHTML = buildNav('equipe');
 
 // Module-level so modal/tooltip functions can access them
-let _joueurStats      = {};
-let _joueurMap        = {};
-let _eliminatedNations = new Set();
-
-function computeEliminatedNations(fixtures) {
-  const eliminated = new Set();
-
-  // 1. Losers in completed KO matches — prefer explicit flag, fall back to goals
-  fixtures.forEach(f => {
-    if (!f.round || f.round.toLowerCase().includes('group')) return;
-    const played = f.status === 'FT' || f.status === 'AET' || f.status === 'PEN';
-    if (!played) return;
-    let loser = null;
-    if (f.home_winner === true)  loser = f.away_name;
-    else if (f.away_winner === true) loser = f.home_name;
-    else if (f.home_goals != null && f.away_goals != null) {
-      if (f.home_goals > f.away_goals) loser = f.away_name;
-      else if (f.away_goals > f.home_goals) loser = f.home_name;
-    }
-    if (loser) eliminated.add(loser);
-  });
-
-  // 2. 4th place in completed groups — determined by goals (no dependency on home_winner)
-  const groupMap = {};
-  fixtures.filter(f => f.round?.toLowerCase().includes('group')).forEach(f => {
-    const played = f.status === 'FT' || f.status === 'AET' || f.status === 'PEN';
-    if (!played || !f.home_name || !f.away_name || f.home_goals == null || f.away_goals == null) return;
-    const g = f.round;
-    if (!groupMap[g]) groupMap[g] = {};
-    if (!groupMap[g][f.home_name]) groupMap[g][f.home_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
-    if (!groupMap[g][f.away_name]) groupMap[g][f.away_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
-    const h = groupMap[g][f.home_name], a = groupMap[g][f.away_name];
-    h.j++; a.j++;
-    h.bp += f.home_goals; h.bc += f.away_goals;
-    a.bp += f.away_goals; a.bc += f.home_goals;
-    if (f.home_goals > f.away_goals)      { h.pts += 3; }
-    else if (f.away_goals > f.home_goals) { a.pts += 3; }
-    else                                   { h.pts += 1; a.pts += 1; }
-  });
-  Object.values(groupMap).forEach(teams => {
-    const list = Object.entries(teams);
-    if (list.length < 4 || list.some(([, t]) => t.j < 3)) return; // groupe incomplet
-    list.sort(([, a], [, b]) =>
-      b.pts - a.pts || (b.bp - b.bc) - (a.bp - a.bc) || b.bp - a.bp
-    );
-    if (list[3]) eliminated.add(list[3][0]);
-  });
-
-  return eliminated;
-}
+let _joueurStats = {};
+let _joueurMap   = {};
 
 async function init() {
   const params  = new URLSearchParams(window.location.search);
@@ -64,7 +16,7 @@ async function init() {
   }
 
   try {
-    const [equipe, classement, butsMap, pointsData, fixturesData] = await Promise.all([
+    const [equipe, classement, butsMap, pointsData] = await Promise.all([
       fetchEquipeComplete(id),
       fetchClassement(),
       fetchButsEquipe(),
@@ -72,11 +24,7 @@ async function init() {
         .select('fixture_id, joueur_id, points, detail, fixtures(home_name, away_name, home_goals, away_goals, date_heure)')
         .eq('equipe_id', id)
         .then(r => r.data || []),
-      db.from('fixtures')
-        .select('round,status,home_name,away_name,home_goals,away_goals')
-        .then(r => r.data || []),
     ]);
-    _eliminatedNations = computeEliminatedNations(fixturesData);
 
     const joueurs    = (equipe.equipe_joueurs || []).map(ej => ej.joueurs).filter(Boolean);
     const budgetUsed = Math.round(joueurs.reduce((s, j) => s + j.valeur, 0) * 10) / 10;
@@ -134,7 +82,7 @@ async function init() {
         <div class="card-title" style="color:${CONFIG.COLORS[pos]}">${pos}</div>
         ${byPos[pos].map(j => {
           const js   = _joueurStats[j.id] || { total: 0, buts: 0, passes: 0 };
-          const elim = _eliminatedNations.has(j.nation);
+          const elim = j.actif === false;
           return `
           <div onclick="openJoueurModal(${j.id})"
             style="display:flex;align-items:center;gap:10px;padding:7px 4px;border-bottom:1px solid var(--border)22;cursor:pointer;border-radius:6px;transition:background .12s;${elim ? 'opacity:.45;' : ''}"
@@ -192,7 +140,7 @@ async function init() {
       const js  = _joueurStats[jid] || { total: 0, buts: 0, passes: 0, matchs: [] };
       if (!j) return;
 
-      if (_eliminatedNations.has(j.nation)) {
+      if (j.actif === false) {
         slot.style.opacity = '0.45';
         slot.style.filter  = 'grayscale(0.8)';
         slot.style.position = 'relative';
@@ -293,7 +241,7 @@ function openJoueurModal(jid) {
           <div style="font-weight:800;font-size:1.05rem">${esc(j.nom)}</div>
           <div style="font-size:0.8rem;color:var(--muted);margin-top:3px;display:flex;align-items:center;gap:6px;flex-wrap:wrap">
             ${esc(j.nation)} · <span class="badge badge-${j.poste}">${j.poste}</span> · ${j.valeur} M$
-            ${_eliminatedNations.has(j.nation) ? `<span style="font-size:0.65rem;font-weight:700;color:var(--red);background:rgba(248,81,73,.15);padding:1px 7px;border-radius:999px;letter-spacing:.03em">Éliminé</span>` : ''}
+            ${j.actif === false ? `<span style="font-size:0.65rem;font-weight:700;color:var(--red);background:rgba(248,81,73,.15);padding:1px 7px;border-radius:999px;letter-spacing:.03em">Éliminé</span>` : ''}
           </div>
         </div>
       </div>
