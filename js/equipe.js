@@ -286,14 +286,20 @@ async function exportRecapImage(id) {
   setLoading(btn, true, 'Génération…');
 
   try {
-    const [equipe, equipesAll, pointsAll, fixturesData] = await Promise.all([
+    const [equipe, equipesMeta, pointsAll, fixturesData] = await Promise.all([
       fetchEquipeComplete(id),
-      db.from('equipes').select('id, nom, created_at').then(r => r.data || []),
+      db.from('equipes').select('id, nom, officiel').then(r => r.data || []),
       fetchAllDb(db.from('points').select('equipe_id, fixture_id, points, joueurs(poste)')),
       db.from('fixtures').select('id, date_heure, status').order('date_heure').then(r => r.data || []),
     ]);
 
-    const joueurs = (equipe.equipe_joueurs || []).map(ej => ej.joueurs).filter(Boolean);
+    const joueurs   = (equipe.equipe_joueurs || []).map(ej => ej.joueurs).filter(Boolean);
+    const monEquipe = equipesMeta.find(e => e.id === id);
+    const estOfficiel = !!monEquipe?.officiel;
+
+    // Le classement/badges se basent sur les équipes officielles si l'équipe
+    // exportée est officielle, sinon sur toutes les équipes (mode "tous").
+    const equipesScope = estOfficiel ? equipesMeta.filter(e => e.officiel) : equipesMeta;
 
     // ── Points par équipe par fixture (pour reconstituer le classement jour par jour) ──
     const fixtureById = {};
@@ -326,29 +332,37 @@ async function exportRecapImage(id) {
       }
     });
 
-    // ── Rang de l'équipe jour par jour ──
+    // ── Rang de l'équipe jour par jour (dans le scope officiel/tous) ──
     const cumulByEq = {};
-    equipesAll.forEach(e => { cumulByEq[e.id] = 0; });
+    equipesScope.forEach(e => { cumulByEq[e.id] = 0; });
     let meilleurRang = Infinity;
     let joursPremier = 0;
+    let rangFinal = null;
 
     dates.forEach(date => {
       (fixByDate[date] || []).forEach(fid => {
-        equipesAll.forEach(e => { cumulByEq[e.id] += ptsByEqFix[e.id + '|' + fid] || 0; });
+        equipesScope.forEach(e => { cumulByEq[e.id] += ptsByEqFix[e.id + '|' + fid] || 0; });
       });
-      const classementJour = equipesAll
+      const classementJour = equipesScope
         .map(e => ({ id: e.id, pts: cumulByEq[e.id] }))
         .sort((a, b) => b.pts - a.pts);
       const rang = classementJour.findIndex(e => e.id === id) + 1;
       if (rang > 0) {
         if (rang < meilleurRang) meilleurRang = rang;
         if (rang === 1) joursPremier++;
+        rangFinal = rang;
       }
     });
     if (meilleurRang === Infinity) meilleurRang = null;
 
-    // ── Badges meilleure attaque / milieu / défense ──
-    const makeTop = (postes) => equipesAll
+    // Rang final basé sur le classement actuel (pas seulement les jours avec matchs)
+    const classementActuel = equipesScope
+      .map(e => ({ id: e.id, pts: cumulByEq[e.id] }))
+      .sort((a, b) => b.pts - a.pts);
+    rangFinal = classementActuel.findIndex(e => e.id === id) + 1 || rangFinal;
+
+    // ── Badges meilleure attaque / milieu / défense (dans le même scope) ──
+    const makeTop = (postes) => equipesScope
       .map(e => ({ id: e.id, val: postes.reduce((s, pos) => s + (ptsByEqPoste[e.id]?.[pos] || 0), 0) }))
       .sort((a, b) => b.val - a.val)[0]?.id;
 
@@ -360,10 +374,12 @@ async function exportRecapImage(id) {
     // ── Points totaux ──
     const ptsTotal = Math.round((cumulByEq[id] || 0) * 10) / 10;
 
-    await drawRecapCanvas({
+    await genererImageRecap({
       nom: equipe.nom,
+      estOfficiel,
       joueurs,
       pts: ptsTotal,
+      rangFinal,
       meilleurRang,
       joursPremier,
       badges,
@@ -377,161 +393,84 @@ async function exportRecapImage(id) {
   }
 }
 
-function drawRecapCanvas({ nom, joueurs, pts, meilleurRang, joursPremier, badges }) {
-  const W = 1080, H = 1350;
-  const canvas = document.createElement('canvas');
-  canvas.width = W; canvas.height = H;
-  const ctx = canvas.getContext('2d');
+const MEDAILLES = { 1: { emoji: '🥇', color: 'var(--gold)' }, 2: { emoji: '🥈', color: 'var(--silver)' }, 3: { emoji: '🥉', color: 'var(--bronze)' } };
 
-  // Fond
-  const grad = ctx.createLinearGradient(0, 0, 0, H);
-  grad.addColorStop(0, '#0d1117');
-  grad.addColorStop(1, '#161b22');
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, W, H);
-
-  // En-tête
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#8b949e';
-  ctx.font = '600 28px -apple-system, Segoe UI, sans-serif';
-  ctx.fillText('🐔 C\'EST QUOI CE POULET ?', W / 2, 70);
-
-  ctx.fillStyle = '#e6edf3';
-  ctx.font = '800 56px -apple-system, Segoe UI, sans-serif';
-  wrapText(ctx, nom, W / 2, 145, W - 100, 60);
-
-  // Badges (attaque/milieu/défense)
-  let by = 210;
-  if (badges.length > 0) {
-    const badgeFont = '700 22px -apple-system, Segoe UI, sans-serif';
-    ctx.font = badgeFont;
-    const paddings = badges.map(b => ctx.measureText(`${b.icon} ${b.label}`).width + 40);
-    const totalW = paddings.reduce((s, w) => s + w, 0) + (badges.length - 1) * 14;
-    let bx = W / 2 - totalW / 2;
-    badges.forEach((b, i) => {
-      const text = `${b.icon} ${b.label}`;
-      const bw = paddings[i];
-      roundRect(ctx, bx, by, bw, 44, 22);
-      ctx.fillStyle = 'rgba(255,215,0,0.15)';
-      ctx.fill();
-      ctx.strokeStyle = '#FFD700';
-      ctx.lineWidth = 1.5;
-      ctx.stroke();
-      ctx.fillStyle = '#FFD700';
-      ctx.textAlign = 'center';
-      ctx.fillText(text, bx + bw / 2, by + 29);
-      bx += bw + 14;
-    });
-    by += 70;
-  } else {
-    by += 20;
-  }
-
-  // Stat cards : points / meilleure position / jours premier
-  const stats = [
-    { val: pts,                                    label: 'Points' },
-    { val: meilleurRang ? `#${meilleurRang}` : '—', label: 'Meilleure position' },
-    { val: joursPremier,                            label: 'Jours n°1' },
-  ];
-  const cardW = (W - 120) / 3 - 20, cardH = 130;
-  stats.forEach((s, i) => {
-    const cx = 60 + i * (cardW + 20);
-    roundRect(ctx, cx, by, cardW, cardH, 14);
-    ctx.fillStyle = '#161b22';
-    ctx.fill();
-    ctx.strokeStyle = '#30363d';
-    ctx.lineWidth = 1;
-    ctx.stroke();
-
-    ctx.fillStyle = '#58a6ff';
-    ctx.font = '800 42px -apple-system, Segoe UI, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(String(s.val), cx + cardW / 2, by + 65);
-
-    ctx.fillStyle = '#8b949e';
-    ctx.font = '600 18px -apple-system, Segoe UI, sans-serif';
-    ctx.fillText(s.label, cx + cardW / 2, by + 100);
-  });
-
-  by += cardH + 50;
-
-  // Composition par poste
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#8b949e';
-  ctx.font = '700 20px -apple-system, Segoe UI, sans-serif';
-  ctx.fillText('COMPOSITION', 60, by);
-  by += 30;
-
+async function genererImageRecap({ nom, estOfficiel, joueurs, pts, rangFinal, meilleurRang, joursPremier, badges }) {
   const byPos = { GAR: [], DEF: [], MIL: [], ATT: [] };
   joueurs.forEach(j => { if (byPos[j.poste]) byPos[j.poste].push(j); });
 
-  CONFIG.POS_ORDER.forEach(pos => {
-    if (byPos[pos].length === 0) return;
-    ctx.fillStyle = CONFIG.COLORS[pos];
-    ctx.font = '800 20px -apple-system, Segoe UI, sans-serif';
-    ctx.fillText(pos, 60, by + 20);
+  const medaille = rangFinal ? MEDAILLES[rangFinal] : null;
+  const pitchHtml = renderPitch(joueurs);
 
-    const rowsCount = Math.ceil(byPos[pos].length / 2);
-    byPos[pos].forEach((j, i) => {
-      const rowY = by + 20;
-      const col = i < rowsCount ? 0 : 1;
-      const row = i < rowsCount ? i : i - rowsCount;
-      const x = 130 + col * 460;
-      const y = rowY + row * 34;
-      const elim = j.actif === false;
+  const card = document.createElement('div');
+  card.style.cssText = 'position:fixed;left:-9999px;top:0;width:640px;background:linear-gradient(180deg,#0d1117 0%,#161b22 100%);padding:36px 32px;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text)';
+  card.innerHTML = `
+    <div style="text-align:center;margin-bottom:20px">
+      <div style="font-size:0.8rem;font-weight:700;color:var(--muted);letter-spacing:.06em;text-transform:uppercase;margin-bottom:8px">🐔 C'est quoi ce poulet ?</div>
+      <div style="font-size:1.9rem;font-weight:800;line-height:1.2">${esc(nom)}</div>
+      <div style="margin-top:8px">
+        <span style="font-size:0.7rem;font-weight:700;letter-spacing:.05em;padding:3px 10px;border-radius:999px;${estOfficiel
+          ? 'color:var(--green);background:rgba(63,185,80,.15);border:1px solid var(--green)'
+          : 'color:var(--muted);background:rgba(139,148,158,.15);border:1px solid var(--border)'}">
+          ${estOfficiel ? '✓ ÉQUIPE OFFICIELLE' : 'ÉQUIPE NON OFFICIELLE'}
+        </span>
+      </div>
+    </div>
 
-      ctx.fillStyle = elim ? '#f8514966' : CONFIG.COLORS[pos];
-      ctx.beginPath();
-      ctx.arc(x, y - 6, 5, 0, Math.PI * 2);
-      ctx.fill();
+    ${badges.length > 0 ? `
+    <div style="display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin-bottom:20px">
+      ${badges.map(b => `
+        <span style="font-size:0.78rem;font-weight:700;color:var(--gold);background:rgba(255,215,0,.12);border:1px solid var(--gold);padding:5px 12px;border-radius:999px">
+          ${b.icon} ${b.label}
+        </span>`).join('')}
+    </div>` : ''}
 
-      ctx.fillStyle = elim ? '#8b949e' : '#e6edf3';
-      ctx.font = '600 20px -apple-system, Segoe UI, sans-serif';
-      ctx.fillText(j.nom + (elim ? ' (éliminé)' : ''), x + 14, y);
-    });
+    <div style="display:flex;gap:12px;margin-bottom:24px">
+      ${statCardRecap(pts, 'Points')}
+      ${statCardRecap(
+        `${medaille ? medaille.emoji + ' ' : ''}#${rangFinal ?? '—'}`,
+        'Position finale',
+        medaille ? medaille.color : null
+      )}
+      ${statCardRecap(meilleurRang ? `#${meilleurRang}` : '—', 'Meilleure position')}
+      ${statCardRecap(joursPremier, 'Jours n°1')}
+    </div>
 
-    const rows = Math.ceil(byPos[pos].length / 2);
-    by += 20 + rows * 34 + 16;
-  });
+    <div class="card" style="padding:20px 8px 8px">
+      ${pitchHtml}
+    </div>
 
-  by += 20;
-  ctx.textAlign = 'center';
-  ctx.fillStyle = '#8b949e';
-  ctx.font = '500 16px -apple-system, Segoe UI, sans-serif';
-  ctx.fillText(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, W / 2, H - 30);
+    <div style="text-align:center;margin-top:20px;font-size:0.72rem;color:var(--muted)">
+      Généré le ${new Date().toLocaleDateString('fr-FR')}
+    </div>
+  `;
+  document.body.appendChild(card);
 
-  // Téléchargement
-  const link = document.createElement('a');
-  link.download = `${nom.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`;
-  link.href = canvas.toDataURL('image/png');
-  link.click();
-}
-
-function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
-  const words = text.split(' ');
-  let line = '', lines = [];
-  words.forEach(w => {
-    const test = line ? line + ' ' + w : w;
-    if (ctx.measureText(test).width > maxWidth && line) {
-      lines.push(line);
-      line = w;
-    } else {
-      line = test;
+  // Griser les joueurs éliminés sur le terrain (même effet que la page équipe, sans texte)
+  card.querySelectorAll('.coach-slot.filled[data-id]').forEach(slot => {
+    const j = joueurs.find(x => x.id === Number(slot.dataset.id));
+    if (j?.actif === false) {
+      slot.style.opacity = '0.45';
+      slot.style.filter  = 'grayscale(0.8)';
     }
   });
-  lines.push(line);
-  const startY = y - (lines.length - 1) * lineHeight / 2;
-  lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight));
+
+  try {
+    const canvas = await html2canvas(card, { backgroundColor: '#0d1117', scale: 2 });
+    const link = document.createElement('a');
+    link.download = `${nom.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`;
+    link.href = canvas.toDataURL('image/png');
+    link.click();
+  } finally {
+    card.remove();
+  }
 }
 
-function roundRect(ctx, x, y, w, h, r) {
-  ctx.beginPath();
-  ctx.moveTo(x + r, y);
-  ctx.arcTo(x + w, y, x + w, y + h, r);
-  ctx.arcTo(x + w, y + h, x, y + h, r);
-  ctx.arcTo(x, y + h, x, y, r);
-  ctx.arcTo(x, y, x + w, y, r);
-  ctx.closePath();
+function statCardRecap(val, label, color) {
+  return `<div style="flex:1;text-align:center;background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 8px">
+    <div style="font-size:1.35rem;font-weight:800;color:${color || 'var(--accent)'}">${val}</div>
+    <div style="font-size:0.68rem;color:var(--muted);margin-top:2px">${label}</div>
+  </div>`;
 }
 
 init();
