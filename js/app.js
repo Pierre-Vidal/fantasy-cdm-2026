@@ -136,7 +136,7 @@ function renderPitch(joueurs) {
   const row = (pos, list) => `
     <div class="pitch-row">
       ${list.map(j => `
-        <div class="pitch-player${j.actif === false ? ' eliminated' : ''}" title="${j.actif === false ? 'Éliminé de la compétition' : ''}">
+        <div class="pitch-player">
           <div class="pitch-avatar" style="border-color:${CONFIG.COLORS[pos]}">
             ${j.photo
               ? `<img src="${j.photo}" alt="${j.nom}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
@@ -146,7 +146,7 @@ function renderPitch(joueurs) {
             </div>
           </div>
           <div class="pitch-name">${j.nom.split(' ').slice(-1)[0]}</div>
-          ${j.actif === false ? `<div class="pitch-elim-tag">❌ Éliminé</div>` : `<div class="pitch-badge" style="background:${CONFIG.COLORS[pos]}">${pos}</div>`}
+          <div class="pitch-badge" style="background:${CONFIG.COLORS[pos]}">${pos}</div>
         </div>
       `).join('')}
     </div>`;

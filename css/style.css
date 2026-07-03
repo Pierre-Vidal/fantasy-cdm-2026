@@ -174,20 +174,6 @@ label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 4
   font-size: 0.55rem; font-weight: 700; padding: 1px 5px;
   border-radius: 10px; color: #fff; letter-spacing: 0.3px;
 }
-.pitch-player.eliminated .pitch-avatar { filter: grayscale(1); opacity: 0.45; }
-.pitch-player.eliminated .pitch-name { color: var(--muted); }
-.pitch-elim-tag {
-  font-size: 0.55rem; font-weight: 700; color: var(--red);
-  background: rgba(248,81,73,0.15); border: 1px solid var(--red);
-  border-radius: 8px; padding: 0 4px; letter-spacing: 0.2px;
-}
-.player-row.eliminated { opacity: 0.5; }
-.player-row.eliminated .player-row-avatar { filter: grayscale(1); }
-.elim-tag {
-  font-size: 0.65rem; font-weight: 700; color: var(--red);
-  background: rgba(248,81,73,0.15); border: 1px solid var(--red);
-  border-radius: 8px; padding: 1px 6px; letter-spacing: 0.2px; white-space: nowrap;
-}
 
 /* ── Création équipe ─────────────────────────────────────── */
 .creer-layout { display: grid; grid-template-columns: 1fr 380px; gap: 20px; align-items: start; }
