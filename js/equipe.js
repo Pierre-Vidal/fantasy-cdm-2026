@@ -395,6 +395,17 @@ async function exportRecapImage(id) {
 
 const MEDAILLES = { 1: { emoji: '🥇', color: 'var(--gold)' }, 2: { emoji: '🥈', color: 'var(--silver)' }, 3: { emoji: '🥉', color: 'var(--bronze)' } };
 
+function attendreImages(container) {
+  const imgs = Array.from(container.querySelectorAll('img'));
+  return Promise.all(imgs.map(img => {
+    if (img.complete) return Promise.resolve();
+    return new Promise(resolve => {
+      img.addEventListener('load', resolve, { once: true });
+      img.addEventListener('error', resolve, { once: true });
+    });
+  }));
+}
+
 async function genererImageRecap({ nom, estOfficiel, joueurs, pts, rangFinal, meilleurRang, joursPremier, badges }) {
   const byPos = { GAR: [], DEF: [], MIL: [], ATT: [] };
   joueurs.forEach(j => { if (byPos[j.poste]) byPos[j.poste].push(j); });
@@ -446,17 +457,10 @@ async function genererImageRecap({ nom, estOfficiel, joueurs, pts, rangFinal, me
   `;
   document.body.appendChild(card);
 
-  // Griser les joueurs éliminés sur le terrain (même effet que la page équipe, sans texte)
-  card.querySelectorAll('.coach-slot.filled[data-id]').forEach(slot => {
-    const j = joueurs.find(x => x.id === Number(slot.dataset.id));
-    if (j?.actif === false) {
-      slot.style.opacity = '0.45';
-      slot.style.filter  = 'grayscale(0.8)';
-    }
-  });
+  await attendreImages(card);
 
   try {
-    const canvas = await html2canvas(card, { backgroundColor: '#0d1117', scale: 2 });
+    const canvas = await html2canvas(card, { backgroundColor: '#0d1117', scale: 2, useCORS: true });
     const link = document.createElement('a');
     link.download = `${nom.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`;
     link.href = canvas.toDataURL('image/png');
