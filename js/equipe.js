@@ -51,12 +51,13 @@ async function init() {
       <div style="margin-bottom:16px">
         <div class="card-title" style="color:${CONFIG.COLORS[pos]}">${pos}</div>
         ${byPos[pos].map(j => `
-          <div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)22">
-            ${j.photo ? `<img src="${j.photo}" alt="${j.nom}" style="width:32px;height:32px;border-radius:50%;object-fit:cover">` : `<div style="width:32px;height:32px;border-radius:50%;background:${CONFIG.COLORS[pos]}22;display:flex;align-items:center;justify-content:center;color:${CONFIG.COLORS[pos]};font-size:0.75rem;font-weight:700">${j.nom.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>`}
+          <div class="player-row${j.actif === false ? ' eliminated' : ''}" style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border)22" title="${j.actif === false ? 'Éliminé de la compétition' : ''}">
+            ${j.photo ? `<img class="player-row-avatar" src="${j.photo}" alt="${j.nom}" style="width:32px;height:32px;border-radius:50%;object-fit:cover">` : `<div class="player-row-avatar" style="width:32px;height:32px;border-radius:50%;background:${CONFIG.COLORS[pos]}22;display:flex;align-items:center;justify-content:center;color:${CONFIG.COLORS[pos]};font-size:0.75rem;font-weight:700">${j.nom.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>`}
             <div style="flex:1">
               <div style="font-weight:600;font-size:0.875rem">${esc(j.nom)}</div>
               <div style="font-size:0.75rem;color:var(--muted)">${esc(j.nation)}</div>
             </div>
+            ${j.actif === false ? `<div class="elim-tag">❌ Éliminé</div>` : ''}
             <div style="font-size:0.875rem;font-weight:700;color:var(--green)">${j.valeur} M$</div>
           </div>`).join('')}
       </div>`).join('');
