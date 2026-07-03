@@ -7,26 +7,61 @@ const ROUND_ORDER = {
   'Semi-finals': 7, '3rd Place Final': 8, 'Final': 9,
 };
 
-// Stocke le HTML de chaque cellule pour le tooltip (évite l'injection dans onclick)
 const tipStore = {};
+let equipes = [];
+const hiddenEquipes = new Set();
 
-// ── Init ─────────────────────────────────────────────────────
+// ── Sélecteur d'équipes ───────────────────────────────────
+function toggleEquipe(id) {
+  if (hiddenEquipes.has(id)) hiddenEquipes.delete(id);
+  else hiddenEquipes.add(id);
+  applyVisibility();
+}
+
+function toggleAll(show) {
+  if (show) hiddenEquipes.clear();
+  else equipes.forEach(e => hiddenEquipes.add(e.id));
+  applyVisibility();
+}
+
+function applyVisibility() {
+  equipes.forEach(e => {
+    const hidden = hiddenEquipes.has(e.id);
+    // Cellules du tableau
+    document.querySelectorAll(`[data-equipe="${e.id}"]`).forEach(el => {
+      if (!el.classList.contains('team-toggle')) el.style.display = hidden ? 'none' : '';
+    });
+    // Bouton toggle
+    const btn = document.querySelector(`.team-toggle[data-equipe="${e.id}"]`);
+    if (btn) btn.classList.toggle('active', !hidden);
+  });
+}
+
+function setMode(mode) {
+  setModeTournoi(mode);
+  init();
+}
+
+// ── Init ─────────────────────────────────────────────────
 async function init() {
   const content = document.getElementById('content');
   try {
-    const [equipes, fixtures, allPoints] = await Promise.all([
-      db.from('equipes').select('id,nom').order('nom').then(r => { if (r.error) throw r.error; return r.data; }),
+    const [eqs, fixtures, allPoints] = await Promise.all([
+      db.from('equipes').select('id,nom,officiel').order('nom').then(r => { if (r.error) throw r.error; return r.data; }),
       db.from('fixtures').select('id,round,date_heure,status,home_name,away_name,home_goals,away_goals').order('date_heure').then(r => { if (r.error) throw r.error; return r.data; }),
-      db.from('points').select('equipe_id,fixture_id,joueur_id,points,detail,joueurs(nom,poste)').then(r => { if (r.error) throw r.error; return r.data; }),
+      fetchAllDb(db.from('points').select('equipe_id,fixture_id,joueur_id,points,detail,joueurs(nom,poste)')),
     ]);
 
+    const mode = getModeTournoi();
+    equipes = mode === 'officiel' ? eqs.filter(e => e.officiel) : eqs;
+
     if (equipes.length === 0) {
-      content.innerHTML = '<div class="empty-state">Aucune équipe inscrite.</div>';
+      content.innerHTML = buildModeToggle() + '<div class="empty-state">Aucune équipe à afficher.</div>';
       return;
     }
 
-    // ── Construit la grille fixture × equipe ─────────────────
-    const grid = {}; // grid[fixtureId][equipeId] = { total, joueurs[] }
+    // ── Grille fixture × equipe ───────────────────────────
+    const grid = {};
     allPoints.forEach(p => {
       if (!grid[p.fixture_id]) grid[p.fixture_id] = {};
       if (!grid[p.fixture_id][p.equipe_id]) grid[p.fixture_id][p.equipe_id] = { total: 0, joueurs: [] };
@@ -37,7 +72,6 @@ async function init() {
       cell.joueurs.push({ nom: p.joueurs?.nom || '?', poste: p.joueurs?.poste || '?', points: p.points, detail });
     });
 
-    // Trier joueurs par points desc + arrondir total
     Object.values(grid).forEach(byEq =>
       Object.values(byEq).forEach(c => {
         c.joueurs.sort((a, b) => b.points - a.points);
@@ -45,14 +79,20 @@ async function init() {
       })
     );
 
-    // ── Filtre les matchs terminés (même sans points) ─────────
-    const doneFixtures = fixtures.filter(f => f.status === 'FT');
+    const doneFixtures = fixtures.filter(f => f.status === 'FT' || f.status === 'AET' || f.status === 'PEN');
     if (doneFixtures.length === 0) {
       content.innerHTML = '<div class="empty-state">Aucun match terminé pour le moment.</div>';
       return;
     }
 
-    // ── Groupe par round ──────────────────────────────────────
+    // Trier les équipes par total de points décroissant
+    equipes = equipes.slice().sort((a, b) => {
+      const ta = doneFixtures.reduce((s, f) => s + (grid[f.id]?.[a.id]?.total ?? 0), 0);
+      const tb = doneFixtures.reduce((s, f) => s + (grid[f.id]?.[b.id]?.total ?? 0), 0);
+      return tb - ta;
+    });
+
+    // ── Groupes par round ─────────────────────────────────
     const byRound = {};
     doneFixtures.forEach(f => {
       const r = f.round || 'Autre';
@@ -61,10 +101,20 @@ async function init() {
     });
     const rounds = Object.keys(byRound).sort((a, b) => (ROUND_ORDER[a] || 99) - (ROUND_ORDER[b] || 99));
 
-    // ── Construit le tableau ──────────────────────────────────
+    // ── Sélecteur équipes ─────────────────────────────────
+    const selector = `
+      ${buildModeToggle()}
+      <div class="team-selector">
+        <span style="font-size:0.78rem;color:var(--muted);font-weight:700;white-space:nowrap">Équipes :</span>
+        ${equipes.map(e => `<button class="team-toggle active" data-equipe="${e.id}" onclick="toggleEquipe('${e.id}')">${esc(e.nom)}${mode === 'tous' && !e.officiel ? ' <span style="font-size:0.6rem;opacity:.6">★</span>' : ''}</button>`).join('')}
+        <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 10px" onclick="toggleAll(true)">Toutes</button>
+        <button class="btn btn-secondary" style="font-size:0.72rem;padding:3px 10px" onclick="toggleAll(false)">Aucune</button>
+      </div>`;
+
+    // ── Tableau ───────────────────────────────────────────
     let html = `<div class="scores-wrap"><table class="scores-table"><thead><tr>
       <th class="col-match">Match</th>
-      ${equipes.map(e => `<th style="text-align:center;min-width:100px">${esc(e.nom)}</th>`).join('')}
+      ${equipes.map(e => `<th data-equipe="${e.id}" style="text-align:center;min-width:110px">${esc(e.nom)}</th>`).join('')}
     </tr></thead><tbody>`;
 
     rounds.forEach(round => {
@@ -85,19 +135,18 @@ async function init() {
           </td>
           ${equipes.map(e => {
             const cell = fGrid[e.id];
-            if (!cell) return `<td style="text-align:center;color:var(--border)">—</td>`;
+            if (!cell) return `<td data-equipe="${e.id}" style="text-align:center;color:var(--border)">—</td>`;
 
             const isTop = maxPts !== null && cell.total === maxPts;
-            const color = isTop ? 'var(--green)' : 'var(--text)';
             const key   = `${fid}_${e.id}`;
             tipStore[key] = buildTipHtml(cell);
 
-            return `<td class="score-cell"
+            return `<td data-equipe="${e.id}" class="score-cell"
                         style="${isTop ? 'background:var(--green)12' : ''}"
                         onmouseenter="showTip(event,'${key}')"
                         onmouseleave="hideTip()"
                         onclick="clickTip(event,'${key}')">
-              <span class="score-val" style="color:${color}">${cell.total}</span>
+              <span class="score-val" style="color:${isTop ? 'var(--green)' : 'var(--text)'}">${cell.total}</span>
               <span style="font-size:0.7rem;color:var(--muted)"> pts</span>
             </td>`;
           }).join('')}
@@ -116,19 +165,19 @@ async function init() {
       <td class="col-match" style="font-size:0.8rem;text-transform:uppercase;letter-spacing:.05em">Total</td>
       ${equipes.map((e, i) => {
         const isTop = totals[i] === maxTotal;
-        return `<td style="text-align:center;font-size:1.1rem;color:${isTop ? 'var(--green)' : 'var(--text)'}">${totals[i]}</td>`;
+        return `<td data-equipe="${e.id}" style="text-align:center;font-size:1.1rem;color:${isTop ? 'var(--green)' : 'var(--text)'}">${totals[i]}</td>`;
       }).join('')}
     </tr>`;
 
     html += `</tbody></table></div>`;
-    content.innerHTML = html;
+    content.innerHTML = selector + html;
 
   } catch(e) {
     content.innerHTML = `<div class="error-state">Erreur : ${e.message}</div>`;
   }
 }
 
-// ── Contenu tooltip ───────────────────────────────────────────
+// ── Tooltip ───────────────────────────────────────────────
 function buildTipHtml(cell) {
   const rows = cell.joueurs
     .filter(j => j.points !== 0 || Object.keys(j.detail).length > 0)
@@ -150,17 +199,16 @@ function buildTipHtml(cell) {
   </div>${rows || '<div style="color:var(--muted)">Aucun point sur ce match</div>'}`;
 }
 
-// ── Gestion tooltip ───────────────────────────────────────────
 const tip    = document.getElementById('score-tip');
 let tipTimer = null;
 let pinned   = false;
 
 function positionTip(event) {
   const margin = 12;
-  const w      = tip.offsetWidth  || 280;
-  const h      = tip.offsetHeight || 200;
-  let   x      = event.clientX + margin;
-  let   y      = event.clientY + margin;
+  const w = tip.offsetWidth  || 280;
+  const h = tip.offsetHeight || 200;
+  let x = event.clientX + margin;
+  let y = event.clientY + margin;
   if (x + w > window.innerWidth  - 8) x = event.clientX - w - margin;
   if (y + h > window.innerHeight - 8) y = event.clientY - h - margin;
   tip.style.left = Math.max(8, x) + 'px';
@@ -170,7 +218,7 @@ function positionTip(event) {
 function showTip(event, key) {
   if (pinned) return;
   clearTimeout(tipTimer);
-  tip.innerHTML    = tipStore[key] || '';
+  tip.innerHTML = tipStore[key] || '';
   tip.style.display = 'block';
   positionTip(event);
 }
@@ -183,13 +231,11 @@ function hideTip() {
 function clickTip(event, key) {
   event.stopPropagation();
   if (pinned && tip.dataset.key === key) {
-    pinned = false;
-    tip.style.display = 'none';
-    return;
+    pinned = false; tip.style.display = 'none'; return;
   }
-  tip.innerHTML     = tipStore[key] || '';
+  tip.innerHTML = tipStore[key] || '';
   tip.style.display = 'block';
-  tip.dataset.key   = key;
+  tip.dataset.key = key;
   tip.style.pointerEvents = 'auto';
   positionTip(event);
   pinned = true;

@@ -29,7 +29,54 @@
     </div>
     <div id="rapide-panel" style="display:none">
       <div style="font-size:0.8rem;color:var(--green);margin-bottom:10px">✓ Connecté</div>
-      <div id="rapide-equipes" style="font-size:0.875rem"></div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px">Équipes</div>
+      <div id="rapide-equipes" style="font-size:0.875rem;margin-bottom:20px"></div>
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🔍 Diagnostic — joueurs d'un match</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Entre un fixture ID pour voir si les joueurs de l'API sont bien dans ta DB. En <span style="color:var(--red)">rouge</span> = ID manquant → stats ignorées.</p>
+      <div style="display:flex;gap:8px;margin-bottom:10px">
+        <input type="number" id="diag-fixture-id" placeholder="fixture_id (ex: 1539003)" style="flex:1;font-size:0.85rem">
+        <button class="btn btn-primary btn-sm" onclick="diagFixture()">Analyser</button>
+      </div>
+      <div id="diag-result" style="font-size:0.78rem;overflow-x:auto"></div>
+
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">Barème des points</div>
+      <div id="rapide-bareme"></div>
+
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">⚡ Multiplicateurs phase finale</div>
+      <div id="mult-ui"><div style="color:var(--muted);font-size:0.8rem">Chargement…</div></div>
+
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🎴 Pack de joueurs</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Ouvre un pack de 5 joueurs aléatoires avec effets de rareté.</p>
+      <button class="btn btn-primary btn-sm" onclick="ouvrirPackModal()">🎴 Ouvrir un pack</button>
+
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🆓 Créer une équipe libre</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Sans limite de budget ni de formation. Non-officielle par défaut.</p>
+      <input type="text" id="libre-nom" placeholder="Nom de l'équipe" style="width:100%;margin-bottom:10px;box-sizing:border-box">
+      <div class="player-filters" style="margin-bottom:8px;flex-wrap:wrap">
+        <button class="filter-btn active" data-libre-pos="ALL"  onclick="setLibrePos('ALL')">Tous</button>
+        <button class="filter-btn filter-GAR" data-libre-pos="GAR" onclick="setLibrePos('GAR')">🧤 GAR</button>
+        <button class="filter-btn filter-DEF" data-libre-pos="DEF" onclick="setLibrePos('DEF')">🛡️ DEF</button>
+        <button class="filter-btn filter-MIL" data-libre-pos="MIL" onclick="setLibrePos('MIL')">⚙️ MIL</button>
+        <button class="filter-btn filter-ATT" data-libre-pos="ATT" onclick="setLibrePos('ATT')">⚡ ATT</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <input type="text" id="libre-search" placeholder="🔍 Rechercher…" style="flex:1;font-size:0.8rem" oninput="renderLibreList()">
+        <select id="libre-nation" style="font-size:0.78rem;max-width:130px" onchange="renderLibreList()">
+          <option value="">🌍 Toutes</option>
+        </select>
+      </div>
+      <div id="libre-player-list" style="max-height:260px;overflow-y:auto;border:1px solid var(--border);border-radius:8px;margin-bottom:10px"></div>
+      <div style="font-size:0.72rem;font-weight:700;color:var(--muted);margin-bottom:4px">Sélectionnés : <span id="libre-count">0</span></div>
+      <div id="libre-selected" style="margin-bottom:10px"><span style="color:var(--muted);font-size:0.8rem">Aucun joueur sélectionné</span></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-secondary btn-sm" onclick="viderLibreSelection()">Vider</button>
+        <button class="btn btn-primary btn-sm" style="flex:1" onclick="creerEquipeLibre()">Créer l'équipe</button>
+      </div>
+
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🏆 Meilleure équipe théorique</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:10px">Équipe optimale avec les scores actuels, budget 110 M$.</p>
+      <button class="btn btn-primary btn-sm" onclick="calculerMeilleureEquipe()">Calculer</button>
+      <div id="best-team-result" style="margin-top:14px"></div>
     </div>
   </div>
 
@@ -108,6 +155,34 @@
         <div id="points-log" style="margin-top:12px;font-size:0.78rem;color:var(--muted);font-family:monospace;max-height:120px;overflow:auto"></div>
       </div>
 
+      <!-- Barème des points -->
+      <div class="card" style="grid-column: 1 / -1">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+          <div class="card-title" style="margin:0">⭐ Barème des points</div>
+          <button id="save-bareme-btn" class="btn btn-primary" onclick="sauvegarderBareme()">💾 Sauvegarder le barème</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:14px">
+          Modifie les valeurs puis sauvegarde. Lance ensuite un recalcul des points ci-dessus pour appliquer.
+        </p>
+        <div id="bareme-editor-body">
+          <div style="color:var(--muted);font-size:0.85rem">Chargement…</div>
+        </div>
+      </div>
+
+      <!-- Diagnostic IDs joueurs -->
+      <div class="card" style="grid-column: 1 / -1">
+        <div class="card-title">🔍 Diagnostic — joueurs d'un match (API vs DB)</div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
+          Entre un fixture ID pour voir quels joueurs l'API retourne et si leur ID est dans ta DB.
+          Les <span style="color:var(--red)">rouges</span> ne sont pas dans <code>joueurs</code> → leurs stats sont ignorées.
+        </p>
+        <div style="display:flex;gap:8px;margin-bottom:12px">
+          <input type="number" id="diag-fixture-id" placeholder="fixture_id (ex: 1539003)" style="flex:1">
+          <button class="btn btn-primary" onclick="diagFixture()">🔍 Analyser</button>
+        </div>
+        <div id="diag-result" style="font-size:0.82rem"></div>
+      </div>
+
       <!-- Import stats (match) -->
       <div class="card" style="grid-column: 1 / -1">
         <div class="card-title">📊 Importer stats d'un match</div>
@@ -126,6 +201,18 @@
       <div class="card">
         <div class="card-title">👥 Équipes inscrites</div>
         <div id="liste-equipes" style="font-size:0.875rem;color:var(--muted)">Charge après connexion…</div>
+      </div>
+
+      <!-- Meilleure équipe théorique -->
+      <div class="card" style="grid-column: 1 / -1">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:8px">
+          <div class="card-title" style="margin:0">🏆 Meilleure équipe théorique</div>
+          <button class="btn btn-primary" onclick="calculerMeilleureEquipe()">Calculer</button>
+        </div>
+        <p style="font-size:0.8rem;color:var(--muted);margin-bottom:14px">
+          Équipe optimale avec les scores actuels, dans le budget de 110 M$ et les règles de formation.
+        </p>
+        <div id="best-team-result"></div>
       </div>
 
       <!-- Danger zone -->

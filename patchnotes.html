@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🐔 C'est quoi ce poulet ? — Notes de mise à jour</title>
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">📝 Notes de mise à jour</div>
+    <div class="page-subtitle">Historique des améliorations de la plateforme</div>
+  </div>
+
+  <div style="max-width:680px;display:flex;flex-direction:column;gap:20px">
+
+    <!-- v2.0 -->
+    <div class="card" style="border-color:var(--orange)44">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:1.05rem;font-weight:800;color:var(--orange)">v2.0</span>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Juin 2026</span>
+        <span style="margin-left:auto;font-size:0.72rem;background:var(--orange)22;color:var(--orange);padding:2px 8px;border-radius:999px;font-weight:700">Récent</span>
+      </div>
+
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:8px">⚡ Multiplicateurs de phase finale</div>
+      <ul class="patch-list" style="margin-bottom:14px">
+        <li>Les points sont multipliés pour les matchs à élimination directe : <strong>Quarts ×2 · Demies ×2.5 · Finale ×3</strong></li>
+        <li>Activable / désactivable en un clic depuis l'admin (panneau accès rapide)</li>
+        <li>Les valeurs sont modifiables librement depuis l'admin</li>
+        <li style="color:var(--muted)"><em>Note : si ces multiplicateurs rendent la fin du tournoi trop disproportionnée par rapport à la phase de groupes, ils peuvent être retirés à tout moment.</em></li>
+      </ul>
+
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:8px">🏆 Arbre de tournoi</div>
+      <ul class="patch-list" style="margin-bottom:14px">
+        <li>La page Tournoi affiche un <strong>bracket visuel horizontal</strong> pour la phase finale</li>
+        <li>Colonnes colorées par round avec le multiplicateur correspondant affiché</li>
+        <li>Logos des équipes, scores en temps réel, gagnant surligné</li>
+        <li>S'alimentera automatiquement au fur et à mesure que les matchs K.O. seront connus</li>
+      </ul>
+
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:8px">🎴 Pack de joueurs v2</div>
+      <ul class="patch-list">
+        <li>Distribution garantie : <strong>2 Rares · 2 Épiques · 1 Légendaire</strong> — plus de carte Commune</li>
+        <li>Les cartes sont <strong>empilées</strong> comme un vrai booster — révélation une par une en ordre croissant de rareté</li>
+        <li>Animation de fly-off entre chaque carte, effets holographiques au survol</li>
+        <li>La carte Légendaire déclenche une animation dorée avant le retournement</li>
+      </ul>
+    </div>
+
+    <!-- v1.5 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:1.05rem;font-weight:800;color:var(--accent)">v1.5</span>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Juin 2026</span>
+      </div>
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:10px">👑 Mode Officiel / Non-officiel</div>
+      <ul class="patch-list">
+        <li>Les équipes créées depuis le site sont <strong>non-officielles</strong> par défaut — elles ne participent pas au cash prize</li>
+        <li>Toggle <strong>👑 Officiel / 🌍 Tous</strong> sur le classement, les scores et les graphiques</li>
+        <li>En mode Officiel : seules les équipes validées sont affichées, avec les cash prizes sur le podium</li>
+        <li>En mode Tous : toutes les équipes sont visibles, les non-officielles taguées "non-off."</li>
+      </ul>
+    </div>
+
+    <!-- v1.3 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:1.05rem;font-weight:800;color:var(--accent)">v1.3</span>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Juin 2026</span>
+      </div>
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:10px">⚽ Page équipe enrichie</div>
+      <ul class="patch-list">
+        <li><strong>Tooltip au survol</strong> d'un joueur sur le terrain : points totaux, buts, passes</li>
+        <li><strong>Modal au clic</strong> sur un joueur : stats complètes par match avec le détail des points</li>
+      </ul>
+    </div>
+
+    <!-- v1.2 -->
+    <div class="card">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:1.05rem;font-weight:800;color:var(--accent)">v1.2</span>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Juin 2026</span>
+      </div>
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:10px">🏆 Podium & Mobile</div>
+      <ul class="patch-list">
+        <li>Affichage des cash prizes sur le podium : 🥇 30€ / 🥈 15€ / 🥉 5€</li>
+        <li>Site entièrement <strong>responsive mobile</strong> : navigation, podium, terrain, tableaux</li>
+        <li>Page Scores : équipes triées par total de points (meilleur à gauche)</li>
+      </ul>
+    </div>
+
+    <!-- v1.0 -->
+    <div class="card" style="border-color:var(--border)55">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:14px">
+        <span style="font-size:1.05rem;font-weight:800;color:var(--muted)">v1.0</span>
+        <span style="font-size:0.72rem;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Juin 2026</span>
+        <span style="margin-left:auto;font-size:0.72rem;background:var(--border);color:var(--muted);padding:2px 8px;border-radius:999px;font-weight:700">Initial</span>
+      </div>
+      <div class="card-title" style="font-size:0.85rem;margin-bottom:10px">🐔 Lancement</div>
+      <ul class="patch-list">
+        <li>Classement en temps réel avec podium et tableau</li>
+        <li>Création d'équipe : budget 100 M$, sélection de joueurs par poste</li>
+        <li>Vue terrain (pitch) avec formations</li>
+        <li>Page Scores par match avec tooltip de détail</li>
+        <li>Page Statistiques : progression des points, buts par équipe, top buteurs</li>
+        <li>Page Barème : règles de points consultables</li>
+        <li>Synchronisation automatique toutes les heures depuis API-Football v3</li>
+      </ul>
+    </div>
+
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script>document.getElementById('nav-placeholder').innerHTML = buildNav('patchnotes');</script>
+</body>
+</html>

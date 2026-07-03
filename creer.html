@@ -42,8 +42,15 @@
             <button class="filter-btn filter-MIL" data-pos="MIL">⚙️ MIL</button>
             <button class="filter-btn filter-ATT" data-pos="ATT">⚡ ATT</button>
           </div>
-          <div style="margin-bottom:10px">
-            <input type="text" id="search" placeholder="🔍 Rechercher un joueur…">
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <select id="filtre-nation" style="flex:1;font-size:0.8rem">
+              <option value="">🌍 Toutes les nations</option>
+            </select>
+            <button class="btn btn-secondary" onclick="resetFiltres()" title="Réinitialiser les filtres" style="padding:0 10px;font-size:0.85rem">✕</button>
+          </div>
+          <div style="display:flex;gap:8px;margin-bottom:10px">
+            <input type="text" id="search" placeholder="🔍 Rechercher… (fautes tolérées)" style="flex:1">
+            <button id="sort-btn" class="btn btn-secondary" onclick="toggleSort()" style="white-space:nowrap;padding:0 12px;font-size:0.8rem">Prix ↓</button>
           </div>
           <div id="player-list" class="player-list">
             <div class="empty-state"><div class="spinner" style="width:24px;height:24px;border-width:2px"></div></div>

@@ -3,6 +3,7 @@ document.getElementById('nav-placeholder').innerHTML = buildNav('tournoi');
 
 let allFixtures = [];
 let tabLoaded   = { groupes: false, finale: false };
+let multConfig  = null; // chargé depuis config DB
 
 function switchTab(tab, btn) {
   document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -14,9 +15,13 @@ function switchTab(tab, btn) {
 
 async function init() {
   try {
-    const { data, error } = await db.from('fixtures').select('*').order('date_heure');
-    if (error) throw error;
-    allFixtures = data || [];
+    const [fixtRes, multRes] = await Promise.all([
+      db.from('fixtures').select('*').order('date_heure'),
+      db.from('config').select('value').eq('key', 'multiplicateurs').maybeSingle(),
+    ]);
+    if (fixtRes.error) throw fixtRes.error;
+    allFixtures = fixtRes.data || [];
+    multConfig  = multRes.data?.value || null;
     tabLoaded.groupes = false;
     renderTab('groupes');
   } catch(e) {
@@ -113,45 +118,154 @@ function renderGroupes() {
   el.innerHTML = html;
 }
 
+// ── Bracket styles ────────────────────────────────────────
+function injectBracketStyles() {
+  if (document.getElementById('bracket-styles')) return;
+  const s = document.createElement('style');
+  s.id = 'bracket-styles';
+  s.textContent = `
+    .bracket-outer { overflow-x:auto; padding:8px 0 24px; -webkit-overflow-scrolling:touch; }
+    .bracket-scroll { display:flex; gap:0; min-width:max-content; align-items:flex-start; padding:0 8px; }
+    .b-col { flex-shrink:0; width:220px; display:flex; flex-direction:column; }
+    .b-col-header { text-align:center; padding:10px 8px 14px; display:flex; flex-direction:column; align-items:center; gap:4px; }
+    .b-col-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; }
+    .b-col-mult { font-size:.64rem; font-weight:700; padding:2px 8px; border-radius:20px; background:rgba(255,255,255,.07); letter-spacing:.05em; }
+    .b-col-games { display:flex; flex-direction:column; justify-content:space-around; flex:1; gap:10px; padding:0 8px 8px; }
+    .b-connector { flex-shrink:0; width:20px; display:flex; flex-direction:column; padding-top:48px; }
+    .b-connector-line { flex:1; border-top:1px solid rgba(255,255,255,.08); border-right:1px solid rgba(255,255,255,.08); border-bottom:1px solid rgba(255,255,255,.08); min-height:30px; }
+    .bm { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:border-color .2s; }
+    .bm:hover { border-color:rgba(88,166,255,.3); }
+    .bm-team { display:flex; align-items:center; gap:7px; padding:7px 10px; font-size:.78rem; }
+    .bm-team.bm-winner { background:rgba(63,185,80,.08); font-weight:800; color:var(--green); }
+    .bm-team.bm-loser  { opacity:.45; }
+    .bm-team.bm-tbd    { color:var(--muted); font-style:italic; }
+    .bm-logo { width:20px; height:20px; object-fit:contain; flex-shrink:0; }
+    .bm-name { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    .bm-score { font-weight:800; font-size:.88rem; margin-left:auto; flex-shrink:0; min-width:14px; text-align:right; }
+    .bm-sep { height:1px; background:var(--border); opacity:.35; }
+    .bm-date { text-align:center; padding:4px 8px; font-size:.62rem; color:var(--muted); background:rgba(0,0,0,.12); }
+    .bm-badge { font-size:.57rem; padding:1px 5px; border-radius:4px; font-weight:700; margin-left:4px; flex-shrink:0; }
+    .bm-live { background:rgba(248,81,73,.25); color:var(--red); }
+    .bm-pen  { background:rgba(240,136,62,.2); color:var(--orange); }
+  `;
+  document.head.appendChild(s);
+}
+
 // ── Phase finale ──────────────────────────────────────────
 function renderFinale() {
+  injectBracketStyles();
   const el = document.getElementById('finale-content');
 
-  const knockoutRounds = [
-    { key: 'Round of 32',   label: 'Huitièmes de finale' },
-    { key: 'Round of 16',   label: 'Quarts de finale' },
-    { key: 'Quarter-finals',label: 'Quarts de finale' },
-    { key: 'Semi-finals',   label: 'Demi-finales' },
-    { key: '3rd Place',     label: '3ème place' },
-    { key: 'Final',         label: 'Finale' },
-  ];
-
-  const byRound = {};
-  allFixtures.forEach(f => {
-    if (!f.round) return;
-    const r = f.round;
-    if (!byRound[r]) byRound[r] = [];
-    byRound[r].push(f);
-  });
-
-  let html = '';
-  knockoutRounds.forEach(({ key, label }) => {
-    const matches = Object.entries(byRound).find(([r]) => r.toLowerCase().includes(key.toLowerCase()));
-    if (!matches) return;
-    html += `
-      <div class="bracket-round">
-        <div class="bracket-round-title">${label}</div>
-        <div class="bracket-matches">
-          ${matches[1].map(f => matchCard(f)).join('')}
-        </div>
-      </div>`;
-  });
-
-  if (!html) {
-    html = `<div class="empty-state"><div class="icon">🏆</div><h3>Phase finale à venir</h3><p>Les matchs à élimination directe s'afficheront ici</p></div>`;
+  function detectRound(r) {
+    if (!r) return null;
+    const s = r.toLowerCase();
+    if (s.includes('group')) return null;
+    // Vérifier '3rd' et 'place' avant 'final' (3rd Place Final contient "final")
+    if (s.includes('3rd') || s.includes('third') || s.includes('place')) return '3rd';
+    // Vérifier 'semi' avant 'final' (Semi-finals contient "final")
+    if (s.includes('semi')) return 'semi';
+    // Vérifier 'quarter' avant 'final' (Quarter-finals contient "finals" !)
+    if (s.includes('quarter')) return 'quarter';
+    // Seulement maintenant chercher 'final' (ne correspond qu'à "Final" pur)
+    if (s.includes('final')) return 'final';
+    if (s.includes('16')) return 'r16';
+    if (s.includes('32')) return 'r32';
+    return null;
   }
 
+  // Lit les valeurs réelles depuis la config DB (ou fallback si inactive/absente)
+  const active = multConfig?.active === true;
+  const mRounds = multConfig?.rounds || {};
+  const multLabel = (key) => {
+    if (!active) return '';
+    const v = mRounds[key];
+    return (v && v !== 1) ? `×${v}` : '';
+  };
+
+  const ROUND_META = {
+    r32:     { label:'Seizièmes de finale', color:'#58a6ff', mult: multLabel('r32')     },
+    r16:     { label:'Huitièmes de finale', color:'#3fb950', mult: multLabel('r16')     },
+    quarter: { label:'Quarts de finale',   color:'#d2a8ff', mult: multLabel('quarter') },
+    semi:    { label:'Demi-finales',       color:'#f0883e', mult: multLabel('semi')    },
+    '3rd':   { label:'3ème place',         color:'#8b949e', mult: ''                   },
+    final:   { label:'Finale',            color:'#FFD700', mult: multLabel('final')   },
+  };
+
+  const ORDER = ['r32', 'r16', 'quarter', 'semi', '3rd', 'final'];
+  const buckets = {};
+  allFixtures.forEach(f => {
+    const key = detectRound(f.round);
+    if (!key) return;
+    if (!buckets[key]) buckets[key] = [];
+    buckets[key].push(f);
+  });
+  const present = ORDER.filter(k => buckets[k] && buckets[k].length > 0);
+
+  if (present.length === 0) {
+    el.innerHTML = `<div class="empty-state">
+      <div class="icon">🏆</div>
+      <h3>Phase finale à venir</h3>
+      <p>Les matchs K.O. s'afficheront ici dès qu'ils seront programmés</p>
+    </div>`;
+    return;
+  }
+
+  present.forEach(k => buckets[k].sort((a,b) => (a.date_heure||'').localeCompare(b.date_heure||'')));
+
+  let html = '<div class="bracket-outer"><div class="bracket-scroll">';
+  present.forEach((k, ci) => {
+    const meta  = ROUND_META[k];
+    const games = buckets[k];
+    html += `
+      <div class="b-col">
+        <div class="b-col-header">
+          <span class="b-col-label" style="color:${meta.color}">${meta.label}</span>
+          ${meta.mult ? `<span class="b-col-mult" style="color:${meta.color};border:1px solid ${meta.color}44">⚡ ${meta.mult}</span>` : ''}
+        </div>
+        <div class="b-col-games">
+          ${games.map(f => bracketMatchCard(f)).join('')}
+        </div>
+      </div>`;
+    if (ci < present.length - 1) {
+      const nextGames = buckets[present[ci + 1]] || [];
+      const pairs = Math.max(1, Math.ceil(Math.min(games.length, nextGames.length * 2) / 2));
+      let connHtml = '';
+      for (let i = 0; i < pairs; i++) connHtml += `<div class="b-connector-line"></div>`;
+      html += `<div class="b-connector">${connHtml}</div>`;
+    }
+  });
+  html += '</div></div>';
   el.innerHTML = html;
+}
+
+function bracketMatchCard(f) {
+  const played = f.status === 'FT' || f.status === 'AET' || f.status === 'PEN';
+  const live   = f.status === '1H' || f.status === '2H' || f.status === 'HT' || f.status === 'ET';
+  const pen    = f.status === 'PEN';
+  const tbd    = !f.home_name;
+
+  const badge = live ? '<span class="bm-badge bm-live">LIVE</span>'
+    : pen          ? '<span class="bm-badge bm-pen">PEN</span>'
+    : f.status === 'AET' ? '<span class="bm-badge bm-pen">AET</span>' : '';
+
+  const teamRow = (name, logo, winner, goals, showBadge) => {
+    const resolved = played || live;
+    const cls = tbd ? 'bm-tbd' : (resolved ? (winner ? 'bm-winner' : 'bm-loser') : '');
+    return `<div class="bm-team ${cls}">
+      ${logo ? `<img src="${esc(logo)}" class="bm-logo" alt="" onerror="this.style.display='none'">` : `<div style="width:20px;height:20px;flex-shrink:0"></div>`}
+      <span class="bm-name">${esc(name || 'À déterminer')}</span>
+      ${showBadge ? badge : ''}
+      ${resolved ? `<span class="bm-score">${goals ?? '?'}</span>` : ''}
+    </div>`;
+  };
+
+  const dateStr = f.date_heure ? formatDate(f.date_heure) : '';
+  return `<div class="bm">
+    ${teamRow(f.home_name, f.home_logo, f.home_winner, f.home_goals, true)}
+    <div class="bm-sep"></div>
+    ${teamRow(f.away_name, f.away_logo, f.away_winner, f.away_goals, false)}
+    ${!played && !live && dateStr ? `<div class="bm-date">${dateStr}</div>` : ''}
+  </div>`;
 }
 
 // ── Helpers d'affichage ───────────────────────────────────

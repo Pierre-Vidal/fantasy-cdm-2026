@@ -1,48 +1,70 @@
 // classement.js
 document.getElementById('nav-placeholder').innerHTML = buildNav('classement');
 
+function setMode(mode) {
+  setModeTournoi(mode);
+  init();
+}
+
 async function init() {
   const content = document.getElementById('content');
   try {
-    const [classement, butsMap] = await Promise.all([fetchClassement(), fetchButsEquipe()]);
+    const [classement, butsMap, equipesMeta] = await Promise.all([
+      fetchClassement(),
+      fetchButsEquipe(),
+      db.from('equipes').select('id,officiel').then(r => r.data || []),
+    ]);
 
-    if (!classement || classement.length === 0) {
+    const officielIds = new Set(equipesMeta.filter(e => e.officiel).map(e => e.id));
+    const mode = getModeTournoi();
+    const filtered = mode === 'officiel'
+      ? classement.filter(e => officielIds.has(e.id))
+      : classement;
+
+    // Recalcule le rang dans la vue filtrée
+    const ranked = filtered.map((eq, i) => ({ ...eq, rang: i + 1 }));
+
+    if (ranked.length === 0) {
       content.innerHTML = `
+        ${buildModeToggle()}
         <div class="empty-state">
           <div class="icon">🐔</div>
-          <h3>Aucune équipe inscrite</h3>
-          <p style="margin-bottom:16px">Sois le premier à créer ton équipe !</p>
-          <a href="creer.html" class="btn btn-primary btn-lg">➕ Créer mon équipe</a>
+          <h3>${mode === 'officiel' ? 'Aucune équipe officielle' : 'Aucune équipe inscrite'}</h3>
+          ${mode === 'officiel' ? '<p>Active le mode "Tous" pour voir toutes les équipes.</p>' : '<p>Sois le premier à créer ton équipe !</p><a href="creer.html" class="btn btn-primary btn-lg">➕ Créer mon équipe</a>'}
         </div>`;
       document.getElementById('last-update').textContent = '';
       return;
     }
 
     const now = new Date().toLocaleDateString('fr-FR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
-    document.getElementById('last-update').textContent = `${classement.length} participant${classement.length > 1 ? 's' : ''} · Mis à jour le ${now}`;
+    document.getElementById('last-update').textContent = `${ranked.length} participant${ranked.length > 1 ? 's' : ''} · Mis à jour le ${now}`;
 
-    const top3 = classement.slice(0, 3);
-    const rest = classement.slice(3);
+    const top3 = ranked.slice(0, 3);
+    const rest = ranked.slice(3);
     const moi  = getMonEquipe();
 
     // ── Podium ──
     const podiumOrder = top3.length === 3 ? [top3[1], top3[0], top3[2]] : top3;
     const podiumClass = top3.length === 3 ? [2, 1, 3]                  : [1, 2, 3];
     const medals      = ['🥇', '🥈', '🥉'];
+    const prizes      = { 1: '30€', 2: '15€', 3: '5€' };
 
     let podiumHtml = '';
     podiumOrder.forEach((eq, i) => {
-      const cls   = `podium-${podiumClass[i]}`;
-      const medal = medals[eq.rang - 1] || '';
-      const buts  = butsMap[eq.id] || 0;
-      const isMe  = moi && moi.id === eq.id;
+      const cls    = `podium-${podiumClass[i]}`;
+      const medal  = medals[eq.rang - 1] || '';
+      const buts   = butsMap[eq.id] || 0;
+      const isMe   = moi && moi.id === eq.id;
+      const prize  = mode === 'officiel' ? (prizes[eq.rang] || '') : '';
+      const isOff  = officielIds.has(eq.id);
       podiumHtml += `
         <div class="podium-slot ${cls}">
           <div class="podium-card" onclick="goEquipe('${eq.id}','${esc(eq.nom)}')">
             <div class="podium-medal">${medal}</div>
-            <div class="podium-nom" title="${esc(eq.nom)}" ${isMe ? 'style="color:var(--accent)"' : ''}>${esc(eq.nom)}</div>
+            <div class="podium-nom" title="${esc(eq.nom)}" ${isMe ? 'style="color:var(--accent)"' : ''}>${esc(eq.nom)}${!isOff && mode === 'tous' ? ' <span style="font-size:0.6rem;opacity:.5;font-weight:400">NON-OFF.</span>' : ''}</div>
             <div class="podium-pts">${eq.pts_total} <span style="font-size:0.8rem;font-weight:400">pts</span></div>
             <div class="podium-buts">⚽ ${buts} buts</div>
+            ${prize ? `<div class="podium-prize">${prize}</div>` : ''}
           </div>
           <div class="podium-base"></div>
         </div>`;
@@ -61,12 +83,16 @@ async function init() {
             </thead>
             <tbody>
               ${rest.map(eq => {
-                const buts = butsMap[eq.id] || 0;
-                const isMe = moi && moi.id === eq.id;
-                return `<tr>
+                const buts  = butsMap[eq.id] || 0;
+                const isMe  = moi && moi.id === eq.id;
+                const isOff = officielIds.has(eq.id);
+                return `<tr${!isOff && mode === 'tous' ? ' style="opacity:0.6"' : ''}>
                   <td><span class="rang-badge">${eq.rang}</span></td>
-                  <td><span class="nom-equipe-link" onclick="goEquipe('${eq.id}','${esc(eq.nom)}')"
-                    ${isMe ? 'style="color:var(--accent)"' : ''}>${esc(eq.nom)}</span></td>
+                  <td>
+                    <span class="nom-equipe-link" onclick="goEquipe('${eq.id}','${esc(eq.nom)}')"
+                      ${isMe ? 'style="color:var(--accent)"' : ''}>${esc(eq.nom)}</span>
+                    ${!isOff && mode === 'tous' ? '<span style="font-size:0.65rem;color:var(--muted);margin-left:5px">non-off.</span>' : ''}
+                  </td>
                   <td><strong>${eq.pts_total}</strong></td>
                   <td>⚽ ${buts}</td>
                   <td><button class="btn btn-secondary btn-sm" onclick="goEquipe('${eq.id}','${esc(eq.nom)}')">👁 Voir</button></td>
@@ -78,6 +104,7 @@ async function init() {
     }
 
     content.innerHTML = `
+      ${buildModeToggle()}
       <div class="podium">${podiumHtml}</div>
       ${tableHtml}
       ${!moi ? `<div style="text-align:center;margin-top:32px">

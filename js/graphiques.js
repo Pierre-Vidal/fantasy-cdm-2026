@@ -6,22 +6,33 @@ const PALETTE = [
   '#e3b341','#7ee787','#ffa657','#cae8ff','#a5d6ff','#ddf4ff',
 ];
 
+function setMode(mode) {
+  setModeTournoi(mode);
+  init();
+}
+
 async function init() {
   const content  = document.getElementById('content');
   const subtitle = document.getElementById('stats-subtitle');
 
   try {
     // Charge tout en parallèle
-    const [classement, equipes, pointsData, statsData, fixturesData] = await Promise.all([
+    const [classementAll, equipesAll, pointsData, statsData, fixturesData, ejData] = await Promise.all([
       fetchClassement(),
-      db.from('equipes').select('id, nom').then(r => r.data || []),
-      db.from('points').select('equipe_id, fixture_id, joueur_id, points').then(r => r.data || []),
-      db.from('stats').select('joueur_id, buts, joueurs(nom, poste)').then(r => r.data || []),
+      db.from('equipes').select('id, nom, officiel').then(r => r.data || []),
+      fetchAllDb(db.from('points').select('equipe_id, fixture_id, joueur_id, points, joueurs(poste)')),
+      fetchAllDb(db.from('stats').select('joueur_id, buts, passes, joueurs(nom, poste)')),
       db.from('fixtures').select('id, date_heure, status').order('date_heure').then(r => r.data || []),
+      fetchAllDb(db.from('equipe_joueurs').select('equipe_id, joueur_id, joueurs(nom, poste)')),
     ]);
 
+    const mode = getModeTournoi();
+    const officielIds = new Set(equipesAll.filter(e => e.officiel).map(e => e.id));
+    const classement = mode === 'officiel' ? classementAll.filter(e => officielIds.has(e.id)) : classementAll;
+    const equipes    = mode === 'officiel' ? equipesAll.filter(e => e.officiel) : equipesAll;
+
     if (classement.length === 0) {
-      content.innerHTML = `<div class="empty-state"><div class="icon">📊</div><h3>Aucune donnée</h3><p>Les stats apparaîtront une fois les matchs commencés</p></div>`;
+      content.innerHTML = buildModeToggle() + `<div class="empty-state"><div class="icon">📊</div><h3>Aucune donnée</h3><p>${mode === 'officiel' ? 'Aucune équipe officielle.' : 'Les stats apparaîtront une fois les matchs commencés.'}</p></div>`;
       subtitle.textContent = '';
       return;
     }
@@ -58,7 +69,7 @@ async function init() {
     });
 
     // Données progression
-    const progressionDatasets = classement.slice(0, 12).map((eq, i) => {
+    const progressionDatasets = classement.map((eq, i) => {
       let cumul = 0;
       const vals = [0];
       dates.forEach(date => {
@@ -92,7 +103,7 @@ async function init() {
     const butsMap = await fetchButsEquipe();
     const butsDatasets = classement.map(eq => butsMap[eq.id] || 0);
 
-    // ── Top joueurs (buts) ──
+    // ── Top buteurs ──
     const butsJoueur = {};
     const nomJoueur  = {};
     statsData.forEach(s => {
@@ -106,8 +117,67 @@ async function init() {
       .map(([id, b]) => ({ nom: nomJoueur[id] || id, buts: b }))
       .sort((a, b) => b.buts - a.buts).slice(0, 10);
 
+    // ── Top passeurs ──
+    const passesJoueur = {};
+    statsData.forEach(s => {
+      const passes = Number(s.passes || 0);
+      if (passes > 0) {
+        passesJoueur[s.joueur_id] = (passesJoueur[s.joueur_id] || 0) + passes;
+        if (s.joueurs) nomJoueur[s.joueur_id] = s.joueurs.nom;
+      }
+    });
+    const topPasseurs = Object.entries(passesJoueur)
+      .map(([id, p]) => ({ nom: nomJoueur[id] || id, passes: p }))
+      .sort((a, b) => b.passes - a.passes).slice(0, 10);
+
+    // ── Joueurs les plus sélectionnés ──
+    const nbEquipesTotal = equipesAll.length || 1;
+    const ownerCount = {};
+    const ownerInfo  = {};
+    ejData.forEach(ej => {
+      ownerCount[ej.joueur_id] = (ownerCount[ej.joueur_id] || 0) + 1;
+      if (ej.joueurs && !ownerInfo[ej.joueur_id]) ownerInfo[ej.joueur_id] = ej.joueurs;
+    });
+    const topOwned = Object.entries(ownerCount)
+      .map(([id, count]) => ({
+        nom:   ownerInfo[id]?.nom   || id,
+        poste: ownerInfo[id]?.poste || '?',
+        count,
+        pct: Math.round(count / nbEquipesTotal * 100),
+      }))
+      .sort((a, b) => b.count - a.count).slice(0, 10);
+
+    // ── Points par poste par équipe fantasy ──
+    const ptsByEqPoste = {};
+    pointsData.forEach(p => {
+      const poste = p.joueurs?.poste;
+      if (!poste) return;
+      if (!ptsByEqPoste[p.equipe_id]) ptsByEqPoste[p.equipe_id] = { ATT: 0, MIL: 0, DEF: 0, GAR: 0 };
+      ptsByEqPoste[p.equipe_id][poste] = (ptsByEqPoste[p.equipe_id][poste] || 0) + Number(p.points || 0);
+    });
+    const makeTopPos = (postes) => equipes
+      .map(e => ({ nom: e.nom, val: Math.round(postes.reduce((s, pos) => s + (ptsByEqPoste[e.id]?.[pos] || 0), 0) * 10) / 10 }))
+      .sort((a, b) => b.val - a.val);
+    const topFantAtt = makeTopPos(['ATT']);
+    const topFantMil = makeTopPos(['MIL']);
+    const topFantDef = makeTopPos(['DEF', 'GAR']);
+
+    // ── Ratio points / but ──
+    const totalPtsByEq = {};
+    classement.forEach(eq => {
+      totalPtsByEq[eq.id] = pointsData
+        .filter(p => p.equipe_id === eq.id)
+        .reduce((s, p) => s + Number(p.points || 0), 0);
+    });
+    const ratioDatasets = classement
+      .map(eq => ({ nom: eq.nom, buts: butsMap[eq.id] || 0, pts: totalPtsByEq[eq.id] || 0 }))
+      .filter(r => r.buts > 0)
+      .map(r => ({ ...r, ratio: Math.round((r.pts / r.buts) * 10) / 10 }))
+      .sort((a, b) => b.ratio - a.ratio);
+
     // ── Rendu HTML ──
     content.innerHTML = `
+      ${buildModeToggle()}
       <div style="margin-bottom:24px">
         <div class="card">
           <div class="card-title">Progression des points</div>
@@ -125,6 +195,38 @@ async function init() {
           ${topJoueurs.length === 0
             ? '<div class="empty-state" style="padding:40px"><p>Pas encore de buts</p></div>'
             : '<div class="chart-wrap"><canvas id="chart-joueurs"></canvas></div>'}
+        </div>
+        <div class="card">
+          <div class="card-title">Top 10 passeurs décisifs</div>
+          ${topPasseurs.length === 0
+            ? '<div class="empty-state" style="padding:40px"><p>Pas encore de passes</p></div>'
+            : '<div class="chart-wrap"><canvas id="chart-passeurs"></canvas></div>'}
+        </div>
+        <div class="card">
+          <div class="card-title">Points par but ⚡</div>
+          ${ratioDatasets.length === 0
+            ? '<div class="empty-state" style="padding:40px"><p>Pas encore de buts</p></div>'
+            : '<div class="chart-wrap"><canvas id="chart-ratio"></canvas></div>'}
+        </div>
+        <div class="card" style="grid-column:1/-1">
+          <div class="card-title">👥 Joueurs les plus sélectionnés</div>
+          ${topOwned.length === 0
+            ? '<div class="empty-state" style="padding:40px"><p>Aucune équipe</p></div>'
+            : '<div class="chart-wrap" style="height:280px"><canvas id="chart-owned"></canvas></div>'}
+        </div>
+      </div>
+      <div class="charts-grid" style="margin-top:24px">
+        <div class="card">
+          <div class="card-title">⚡ Meilleure attaque</div>
+          <div class="chart-wrap"><canvas id="chart-fant-att"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">⚙️ Meilleur milieu</div>
+          <div class="chart-wrap"><canvas id="chart-fant-mil"></canvas></div>
+        </div>
+        <div class="card">
+          <div class="card-title">🛡️ Meilleure défense</div>
+          <div class="chart-wrap"><canvas id="chart-fant-def"></canvas></div>
         </div>
       </div>`;
 
@@ -178,6 +280,105 @@ async function init() {
           scales: {
             x: { grid: { color: '#30363d44' }, beginAtZero: true },
             y: { grid: { color: '#30363d44' } },
+          },
+        },
+      });
+    }
+
+    if (topPasseurs.length > 0) {
+      new Chart(document.getElementById('chart-passeurs'), {
+        type: 'bar',
+        data: {
+          labels: topPasseurs.map(j => j.nom),
+          datasets: [{ label: 'Passes déc.', data: topPasseurs.map(j => j.passes), backgroundColor: '#d2a8ff' }],
+        },
+        options: {
+          indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+          plugins: { legend: { display: false } },
+          scales: {
+            x: { grid: { color: '#30363d44' }, beginAtZero: true, ticks: { stepSize: 1 } },
+            y: { grid: { color: '#30363d44' } },
+          },
+        },
+      });
+    }
+
+    if (topOwned.length > 0) {
+      new Chart(document.getElementById('chart-owned'), {
+        type: 'bar',
+        data: {
+          labels: topOwned.map(j => j.nom),
+          datasets: [{
+            label: 'Équipes',
+            data: topOwned.map(j => j.count),
+            backgroundColor: topOwned.map(j => ({GAR:'#79c0ff',DEF:'#3fb950',MIL:'#f0883e',ATT:'#f85149'}[j.poste] || '#58a6ff')),
+          }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: { callbacks: { label: ctx => {
+              const j = topOwned[ctx.dataIndex];
+              return `${j.count} équipe${j.count > 1 ? 's' : ''} (${j.pct}%) · ${j.poste}`;
+            }}},
+          },
+          scales: {
+            x: { grid: { color: '#30363d44' }, ticks: { maxRotation: 30 } },
+            y: { grid: { color: '#30363d44' }, beginAtZero: true, ticks: { stepSize: 1 } },
+          },
+        },
+      });
+    }
+
+    const hBarOpts = (label) => ({
+      indexAxis: 'y',
+      responsive: true, maintainAspectRatio: false,
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: ctx => `${ctx.formattedValue} pts (${label})` } } },
+      scales: {
+        x: { grid: { color: '#30363d44' }, beginAtZero: true },
+        y: { grid: { color: '#30363d44' } },
+      },
+    });
+    new Chart(document.getElementById('chart-fant-att'), {
+      type: 'bar',
+      data: { labels: topFantAtt.map(r => r.nom), datasets: [{ data: topFantAtt.map(r => r.val), backgroundColor: '#f85149' }] },
+      options: hBarOpts('ATT'),
+    });
+    new Chart(document.getElementById('chart-fant-mil'), {
+      type: 'bar',
+      data: { labels: topFantMil.map(r => r.nom), datasets: [{ data: topFantMil.map(r => r.val), backgroundColor: '#58a6ff' }] },
+      options: hBarOpts('MIL'),
+    });
+    new Chart(document.getElementById('chart-fant-def'), {
+      type: 'bar',
+      data: { labels: topFantDef.map(r => r.nom), datasets: [{ data: topFantDef.map(r => r.val), backgroundColor: '#3fb950' }] },
+      options: hBarOpts('DEF+GAR'),
+    });
+
+    if (ratioDatasets.length > 0) {
+      new Chart(document.getElementById('chart-ratio'), {
+        type: 'bar',
+        data: {
+          labels: ratioDatasets.map(r => r.nom),
+          datasets: [{ label: 'Pts/but', data: ratioDatasets.map(r => r.ratio), backgroundColor: PALETTE }],
+        },
+        options: {
+          responsive: true, maintainAspectRatio: false,
+          plugins: {
+            legend: { display: false },
+            tooltip: {
+              callbacks: {
+                label: ctx => {
+                  const r = ratioDatasets[ctx.dataIndex];
+                  return `${ctx.formattedValue} pts/but (${r.pts} pts · ${r.buts} buts)`;
+                },
+              },
+            },
+          },
+          scales: {
+            x: { grid: { color: '#30363d44' }, ticks: { maxRotation: 45 } },
+            y: { grid: { color: '#30363d44' }, beginAtZero: true },
           },
         },
       });

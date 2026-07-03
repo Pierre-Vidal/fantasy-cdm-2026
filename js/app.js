@@ -49,8 +49,10 @@ function buildNav(activePage) {
         <a href="index.html" class="${activePage === 'classement' ? 'active' : ''}">🏆 Classement</a>
         ${monEquipeLink}
         <a href="scores.html" class="${activePage === 'scores' ? 'active' : ''}">📋 Scores</a>
+        <a href="bareme.html" class="${activePage === 'bareme' ? 'active' : ''}">⭐ Barème</a>
         <a href="tournoi.html" class="${activePage === 'tournoi' ? 'active' : ''}">🌍 Tournoi</a>
         <a href="graphiques.html" class="${activePage === 'graphiques' ? 'active' : ''}">📊 Stats</a>
+        <a href="patchnotes.html" class="${activePage === 'patchnotes' ? 'active' : ''}">📝</a>
         <a href="admin.html" class="${activePage === 'admin' ? 'active' : ''}">⚙️</a>
       </div>
     </nav>`;
@@ -128,45 +130,93 @@ function calculerPoints(poste, stats) {
   return { points: total, detail };
 }
 
-// ── Vue terrain (pitch) ───────────────────────────────────
+// ── Vue terrain (pitch) — même rendu que la création ─────
+const PITCH_SVG_LINES = `<svg class="pitch-svg" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" preserveAspectRatio="none">
+  <rect x="2" y="2" width="96" height="96" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="0.7"/>
+  <line x1="2" y1="50" x2="98" y2="50" stroke="rgba(255,255,255,0.25)" stroke-width="0.5"/>
+  <circle cx="50" cy="50" r="13" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.5"/>
+  <circle cx="50" cy="50" r="1.5" fill="rgba(255,255,255,0.32)"/>
+  <rect x="22" y="2" width="56" height="24" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.5"/>
+  <rect x="34" y="2" width="32" height="9" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.5"/>
+  <circle cx="50" cy="17" r="1" fill="rgba(255,255,255,0.24)"/>
+  <rect x="22" y="74" width="56" height="24" fill="none" stroke="rgba(255,255,255,0.22)" stroke-width="0.5"/>
+  <rect x="34" y="89" width="32" height="9" fill="none" stroke="rgba(255,255,255,0.16)" stroke-width="0.5"/>
+  <circle cx="50" cy="83" r="1" fill="rgba(255,255,255,0.24)"/>
+  <path d="M 2 7 A 5 5 0 0 0 7 2" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.5"/>
+  <path d="M 93 2 A 5 5 0 0 0 98 7" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.5"/>
+  <path d="M 2 93 A 5 5 0 0 1 7 98" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.5"/>
+  <path d="M 93 98 A 5 5 0 0 1 98 93" fill="none" stroke="rgba(255,255,255,0.18)" stroke-width="0.5"/>
+</svg>`;
+
 function renderPitch(joueurs) {
   const byPos = { GAR: [], DEF: [], MIL: [], ATT: [] };
   joueurs.forEach(j => { if (byPos[j.poste]) byPos[j.poste].push(j); });
 
-  const row = (pos, list) => `
-    <div class="pitch-row">
-      ${list.map(j => `
-        <div class="pitch-player">
-          <div class="pitch-avatar" style="border-color:${CONFIG.COLORS[pos]}">
+  const rows = ['ATT', 'MIL', 'DEF', 'GAR'].map(pos => {
+    const color = CONFIG.COLORS[pos];
+    const slots = byPos[pos].map(j => {
+      const initials = j.nom.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase();
+      return `
+        <div class="coach-slot filled" style="--slot-color:${color}" data-id="${j.id}">
+          <div class="coach-avatar">
             ${j.photo
               ? `<img src="${j.photo}" alt="${j.nom}" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`
               : ''}
-            <div class="pitch-initials" style="${j.photo ? 'display:none' : ''};background:${CONFIG.COLORS[pos]}22;color:${CONFIG.COLORS[pos]}">
-              ${j.nom.split(' ').map(w => w[0]).join('').substring(0, 2).toUpperCase()}
-            </div>
+            <div class="coach-initials" style="${j.photo ? 'display:none' : ''}">${initials}</div>
           </div>
-          <div class="pitch-name">${j.nom.split(' ').slice(-1)[0]}</div>
-          <div class="pitch-badge" style="background:${CONFIG.COLORS[pos]}">${pos}</div>
-        </div>
-      `).join('')}
-    </div>`;
+          <div class="coach-name">${j.nom.split(' ').slice(-1)[0]}</div>
+          <div class="coach-val">${j.valeur}M</div>
+        </div>`;
+    }).join('');
+    return `<div class="coach-row">${slots}</div>`;
+  }).join('');
 
-  return `
-    <div class="pitch">
-      <div class="pitch-field">
-        ${row('ATT', byPos.ATT)}
-        ${row('MIL', byPos.MIL)}
-        ${row('DEF', byPos.DEF)}
-        ${row('GAR', byPos.GAR)}
-      </div>
-    </div>`;
+  return `<div class="pitch-coach pitch-coach--readonly">${PITCH_SVG_LINES}${rows}</div>`;
+}
+
+// ── Barème dynamique (Supabase config table) ──────────────
+async function loadBareme() {
+  if (!db) return;
+  try {
+    const { data } = await db.from('config').select('value').eq('key', 'bareme').single();
+    if (data?.value) CONFIG.BAREME = data.value;
+  } catch(e) {} // table pas encore créée → on garde le défaut de config.js
+}
+
+// ── Mode tournoi (officiel / tous) ───────────────────────
+function getModeTournoi() {
+  return localStorage.getItem('cdm_mode') || 'officiel';
+}
+function setModeTournoi(mode) {
+  localStorage.setItem('cdm_mode', mode);
+}
+function buildModeToggle() {
+  const mode = getModeTournoi();
+  return `<div style="display:flex;align-items:center;gap:6px;margin-bottom:20px">
+    <span style="font-size:0.75rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.05em;margin-right:4px">Vue :</span>
+    <button onclick="setMode('officiel')" class="btn btn-sm ${mode === 'officiel' ? 'btn-primary' : 'btn-secondary'}" style="font-size:0.78rem;padding:4px 12px">👑 Officiel</button>
+    <button onclick="setMode('tous')" class="btn btn-sm ${mode === 'tous' ? 'btn-primary' : 'btn-secondary'}" style="font-size:0.78rem;padding:4px 12px">🌍 Tous</button>
+  </div>`;
+}
+
+// ── Pagination Supabase (contourne la limite serveur de 1000 lignes) ──
+async function fetchAllDb(query) {
+  const all = [];
+  let page = 0;
+  const size = 1000;
+  while (true) {
+    const { data, error } = await query.range(page * size, (page + 1) * size - 1);
+    if (error) throw error;
+    all.push(...(data || []));
+    if (!data || data.length < size) break;
+    page++;
+  }
+  return all;
 }
 
 // ── Requêtes DB courantes ─────────────────────────────────
 async function fetchJoueurs() {
-  const { data, error } = await db.from('joueurs').select('*').eq('actif', true).order('poste').order('valeur', { ascending: false });
-  if (error) throw error;
-  return data;
+  return fetchAllDb(db.from('joueurs').select('*').eq('actif', true).order('poste').order('valeur', { ascending: false }));
 }
 
 async function fetchClassement() {
