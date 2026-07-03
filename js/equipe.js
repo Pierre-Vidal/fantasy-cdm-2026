@@ -131,6 +131,10 @@ async function init() {
           <div class="card-title">Effectif</div>
           ${listeHtml}
         </div>
+      </div>
+
+      <div style="margin-top:20px;text-align:right">
+        <button id="btn-export" class="btn btn-secondary" onclick="exportRecapImage('${id}')">📸 Exporter en image</button>
       </div>`;
 
     // ── Event listeners sur les slots du terrain ──────────────
@@ -274,6 +278,260 @@ function statCard(icon, val, label) {
 
 function esc(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// ── Export image récap ────────────────────────────────────────
+async function exportRecapImage(id) {
+  const btn = document.getElementById('btn-export');
+  setLoading(btn, true, 'Génération…');
+
+  try {
+    const [equipe, equipesAll, pointsAll, fixturesData] = await Promise.all([
+      fetchEquipeComplete(id),
+      db.from('equipes').select('id, nom, created_at').then(r => r.data || []),
+      fetchAllDb(db.from('points').select('equipe_id, fixture_id, points, joueurs(poste)')),
+      db.from('fixtures').select('id, date_heure, status').order('date_heure').then(r => r.data || []),
+    ]);
+
+    const joueurs = (equipe.equipe_joueurs || []).map(ej => ej.joueurs).filter(Boolean);
+
+    // ── Points par équipe par fixture (pour reconstituer le classement jour par jour) ──
+    const fixtureById = {};
+    fixturesData.forEach(f => { fixtureById[f.id] = f; });
+
+    const dateSet = new Set();
+    pointsAll.forEach(p => {
+      const f = fixtureById[p.fixture_id];
+      if (f && f.date_heure) dateSet.add(f.date_heure.substring(0, 10));
+    });
+    const dates = Array.from(dateSet).sort();
+
+    const fixByDate = {};
+    fixturesData.forEach(f => {
+      if (!f.date_heure) return;
+      const d = f.date_heure.substring(0, 10);
+      if (!fixByDate[d]) fixByDate[d] = [];
+      fixByDate[d].push(f.id);
+    });
+
+    const ptsByEqFix = {};
+    const ptsByEqPoste = {};
+    pointsAll.forEach(p => {
+      const key = p.equipe_id + '|' + p.fixture_id;
+      ptsByEqFix[key] = (ptsByEqFix[key] || 0) + Number(p.points || 0);
+      const poste = p.joueurs?.poste;
+      if (poste) {
+        if (!ptsByEqPoste[p.equipe_id]) ptsByEqPoste[p.equipe_id] = { ATT: 0, MIL: 0, DEF: 0, GAR: 0 };
+        ptsByEqPoste[p.equipe_id][poste] += Number(p.points || 0);
+      }
+    });
+
+    // ── Rang de l'équipe jour par jour ──
+    const cumulByEq = {};
+    equipesAll.forEach(e => { cumulByEq[e.id] = 0; });
+    let meilleurRang = Infinity;
+    let joursPremier = 0;
+
+    dates.forEach(date => {
+      (fixByDate[date] || []).forEach(fid => {
+        equipesAll.forEach(e => { cumulByEq[e.id] += ptsByEqFix[e.id + '|' + fid] || 0; });
+      });
+      const classementJour = equipesAll
+        .map(e => ({ id: e.id, pts: cumulByEq[e.id] }))
+        .sort((a, b) => b.pts - a.pts);
+      const rang = classementJour.findIndex(e => e.id === id) + 1;
+      if (rang > 0) {
+        if (rang < meilleurRang) meilleurRang = rang;
+        if (rang === 1) joursPremier++;
+      }
+    });
+    if (meilleurRang === Infinity) meilleurRang = null;
+
+    // ── Badges meilleure attaque / milieu / défense ──
+    const makeTop = (postes) => equipesAll
+      .map(e => ({ id: e.id, val: postes.reduce((s, pos) => s + (ptsByEqPoste[e.id]?.[pos] || 0), 0) }))
+      .sort((a, b) => b.val - a.val)[0]?.id;
+
+    const badges = [];
+    if (makeTop(['ATT']) === id)          badges.push({ label: 'Meilleure attaque', icon: '⚡' });
+    if (makeTop(['MIL']) === id)          badges.push({ label: 'Meilleur milieu',   icon: '⚙️' });
+    if (makeTop(['DEF', 'GAR']) === id)   badges.push({ label: 'Meilleure défense', icon: '🛡️' });
+
+    // ── Points totaux ──
+    const ptsTotal = Math.round((cumulByEq[id] || 0) * 10) / 10;
+
+    await drawRecapCanvas({
+      nom: equipe.nom,
+      joueurs,
+      pts: ptsTotal,
+      meilleurRang,
+      joursPremier,
+      badges,
+    });
+
+    showToast('Image générée ✓', 'success');
+  } catch (e) {
+    showToast('Erreur export : ' + e.message, 'error');
+  } finally {
+    setLoading(btn, false);
+  }
+}
+
+function drawRecapCanvas({ nom, joueurs, pts, meilleurRang, joursPremier, badges }) {
+  const W = 1080, H = 1350;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Fond
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#0d1117');
+  grad.addColorStop(1, '#161b22');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  // En-tête
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '600 28px -apple-system, Segoe UI, sans-serif';
+  ctx.fillText('🐔 C\'EST QUOI CE POULET ?', W / 2, 70);
+
+  ctx.fillStyle = '#e6edf3';
+  ctx.font = '800 56px -apple-system, Segoe UI, sans-serif';
+  wrapText(ctx, nom, W / 2, 145, W - 100, 60);
+
+  // Badges (attaque/milieu/défense)
+  let by = 210;
+  if (badges.length > 0) {
+    const badgeFont = '700 22px -apple-system, Segoe UI, sans-serif';
+    ctx.font = badgeFont;
+    const paddings = badges.map(b => ctx.measureText(`${b.icon} ${b.label}`).width + 40);
+    const totalW = paddings.reduce((s, w) => s + w, 0) + (badges.length - 1) * 14;
+    let bx = W / 2 - totalW / 2;
+    badges.forEach((b, i) => {
+      const text = `${b.icon} ${b.label}`;
+      const bw = paddings[i];
+      roundRect(ctx, bx, by, bw, 44, 22);
+      ctx.fillStyle = 'rgba(255,215,0,0.15)';
+      ctx.fill();
+      ctx.strokeStyle = '#FFD700';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+      ctx.fillStyle = '#FFD700';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, bx + bw / 2, by + 29);
+      bx += bw + 14;
+    });
+    by += 70;
+  } else {
+    by += 20;
+  }
+
+  // Stat cards : points / meilleure position / jours premier
+  const stats = [
+    { val: pts,                                    label: 'Points' },
+    { val: meilleurRang ? `#${meilleurRang}` : '—', label: 'Meilleure position' },
+    { val: joursPremier,                            label: 'Jours n°1' },
+  ];
+  const cardW = (W - 120) / 3 - 20, cardH = 130;
+  stats.forEach((s, i) => {
+    const cx = 60 + i * (cardW + 20);
+    roundRect(ctx, cx, by, cardW, cardH, 14);
+    ctx.fillStyle = '#161b22';
+    ctx.fill();
+    ctx.strokeStyle = '#30363d';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+
+    ctx.fillStyle = '#58a6ff';
+    ctx.font = '800 42px -apple-system, Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(String(s.val), cx + cardW / 2, by + 65);
+
+    ctx.fillStyle = '#8b949e';
+    ctx.font = '600 18px -apple-system, Segoe UI, sans-serif';
+    ctx.fillText(s.label, cx + cardW / 2, by + 100);
+  });
+
+  by += cardH + 50;
+
+  // Composition par poste
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '700 20px -apple-system, Segoe UI, sans-serif';
+  ctx.fillText('COMPOSITION', 60, by);
+  by += 30;
+
+  const byPos = { GAR: [], DEF: [], MIL: [], ATT: [] };
+  joueurs.forEach(j => { if (byPos[j.poste]) byPos[j.poste].push(j); });
+
+  CONFIG.POS_ORDER.forEach(pos => {
+    if (byPos[pos].length === 0) return;
+    ctx.fillStyle = CONFIG.COLORS[pos];
+    ctx.font = '800 20px -apple-system, Segoe UI, sans-serif';
+    ctx.fillText(pos, 60, by + 20);
+
+    const rowsCount = Math.ceil(byPos[pos].length / 2);
+    byPos[pos].forEach((j, i) => {
+      const rowY = by + 20;
+      const col = i < rowsCount ? 0 : 1;
+      const row = i < rowsCount ? i : i - rowsCount;
+      const x = 130 + col * 460;
+      const y = rowY + row * 34;
+      const elim = j.actif === false;
+
+      ctx.fillStyle = elim ? '#f8514966' : CONFIG.COLORS[pos];
+      ctx.beginPath();
+      ctx.arc(x, y - 6, 5, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.fillStyle = elim ? '#8b949e' : '#e6edf3';
+      ctx.font = '600 20px -apple-system, Segoe UI, sans-serif';
+      ctx.fillText(j.nom + (elim ? ' (éliminé)' : ''), x + 14, y);
+    });
+
+    const rows = Math.ceil(byPos[pos].length / 2);
+    by += 20 + rows * 34 + 16;
+  });
+
+  by += 20;
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#8b949e';
+  ctx.font = '500 16px -apple-system, Segoe UI, sans-serif';
+  ctx.fillText(`Généré le ${new Date().toLocaleDateString('fr-FR')}`, W / 2, H - 30);
+
+  // Téléchargement
+  const link = document.createElement('a');
+  link.download = `${nom.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-recap.png`;
+  link.href = canvas.toDataURL('image/png');
+  link.click();
+}
+
+function wrapText(ctx, text, x, y, maxWidth, lineHeight) {
+  const words = text.split(' ');
+  let line = '', lines = [];
+  words.forEach(w => {
+    const test = line ? line + ' ' + w : w;
+    if (ctx.measureText(test).width > maxWidth && line) {
+      lines.push(line);
+      line = w;
+    } else {
+      line = test;
+    }
+  });
+  lines.push(line);
+  const startY = y - (lines.length - 1) * lineHeight / 2;
+  lines.forEach((l, i) => ctx.fillText(l, x, startY + i * lineHeight));
+}
+
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
 }
 
 init();
