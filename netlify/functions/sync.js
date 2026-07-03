@@ -64,19 +64,6 @@ async function sbUpsert(table, rows, onConflict) {
   }
 }
 
-async function sbInsert(table, rows) {
-  if (!rows.length) return;
-  const res = await fetch(sbUrl(table), {
-    method: 'POST',
-    headers: { ...sbHeaders(), 'Prefer': 'resolution=ignore-duplicates,return=minimal' },
-    body: JSON.stringify(rows),
-  });
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`sbInsert ${table}: ${res.status} ${txt.substring(0, 300)}`);
-  }
-}
-
 async function sbSelect(table, select, filter, limit = 5000) {
   let url = sbUrl(`${table}?select=${select}&limit=${limit}`);
   if (filter) url += '&' + filter;
@@ -267,7 +254,7 @@ exports.handler = async function () {
             });
           });
 
-          await sbInsert('stats', statsRows);
+          await sbUpsert('stats', statsRows, 'fixture_id,joueur_id');
           log.push(`Stats match ${fid} : ${statsRows.length} ✓`);
         } catch (e) {
           console.error(`Fixture ${fid} error:`, e.message);
