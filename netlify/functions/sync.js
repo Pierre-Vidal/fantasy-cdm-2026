@@ -85,6 +85,67 @@ async function sbSelect(table, select, filter, limit = 5000) {
   return res.json();
 }
 
+async function sbUpdate(table, filter, patch) {
+  const url = sbUrl(`${table}?${filter}`);
+  const res = await fetch(url, {
+    method: 'PATCH',
+    headers: { ...sbHeaders(), 'Prefer': 'return=minimal' },
+    body: JSON.stringify(patch),
+  });
+  if (!res.ok) {
+    const txt = await res.text();
+    throw new Error(`sbUpdate ${table}: ${res.status} ${txt.substring(0, 300)}`);
+  }
+}
+
+// ── Nations éliminées (mêmes règles que le front, côté serveur) ─
+function computeEliminatedNations(fixtures) {
+  const eliminated = new Set();
+
+  // 1. Perdants des matchs à élimination directe déjà joués
+  fixtures.forEach(f => {
+    if (!f.round || f.round.toLowerCase().includes('group')) return;
+    const played = ['FT', 'AET', 'PEN'].includes(f.status);
+    if (!played) return;
+    let loser = null;
+    if (f.home_winner === true)       loser = f.away_name;
+    else if (f.away_winner === true)  loser = f.home_name;
+    else if (f.home_goals != null && f.away_goals != null) {
+      if (f.home_goals > f.away_goals)      loser = f.away_name;
+      else if (f.away_goals > f.home_goals) loser = f.home_name;
+    }
+    if (loser) eliminated.add(loser);
+  });
+
+  // 2. 4e de poule dans les groupes terminés
+  const groupMap = {};
+  fixtures.filter(f => f.round?.toLowerCase().includes('group')).forEach(f => {
+    const played = ['FT', 'AET', 'PEN'].includes(f.status);
+    if (!played || !f.home_name || !f.away_name || f.home_goals == null || f.away_goals == null) return;
+    const g = f.round;
+    if (!groupMap[g]) groupMap[g] = {};
+    if (!groupMap[g][f.home_name]) groupMap[g][f.home_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
+    if (!groupMap[g][f.away_name]) groupMap[g][f.away_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
+    const h = groupMap[g][f.home_name], a = groupMap[g][f.away_name];
+    h.j++; a.j++;
+    h.bp += f.home_goals; h.bc += f.away_goals;
+    a.bp += f.away_goals; a.bc += f.home_goals;
+    if (f.home_goals > f.away_goals)      { h.pts += 3; }
+    else if (f.away_goals > f.home_goals) { a.pts += 3; }
+    else                                   { h.pts += 1; a.pts += 1; }
+  });
+  Object.values(groupMap).forEach(teams => {
+    const list = Object.entries(teams);
+    if (list.length < 4 || list.some(([, t]) => t.j < 3)) return; // groupe incomplet
+    list.sort(([, a], [, b]) =>
+      b.pts - a.pts || (b.bp - b.bc) - (a.bp - a.bc) || b.bp - a.bp
+    );
+    if (list[3]) eliminated.add(list[3][0]);
+  });
+
+  return eliminated;
+}
+
 // ── Calcul des points ─────────────────────────────────────────
 function calculerPoints(poste, stats) {
   const b      = BAREME[poste] || BAREME.MIL;
@@ -258,6 +319,23 @@ exports.handler = async function () {
       }
       log.push(`Points : ${pointsRows.length} recalculés ✓`);
     }
+
+    // ── Étape 4 : Marquer les joueurs des nations éliminées ──
+    console.log('Step 4: updating eliminated players...');
+    const eliminatedNations = computeEliminatedNations(fixtureRows);
+    log.push(`Nations éliminées : ${eliminatedNations.size ? [...eliminatedNations].join(', ') : 'aucune'}`);
+
+    const allJoueurs = await sbSelect('joueurs', 'id,nation,actif', null, 5000);
+    const toDeactivate = allJoueurs.filter(j => eliminatedNations.has(j.nation) && j.actif !== false).map(j => j.id);
+    const toReactivate = allJoueurs.filter(j => !eliminatedNations.has(j.nation) && j.actif === false).map(j => j.id);
+
+    if (toDeactivate.length > 0) {
+      await sbUpdate('joueurs', `id=in.(${toDeactivate.join(',')})`, { actif: false });
+    }
+    if (toReactivate.length > 0) {
+      await sbUpdate('joueurs', `id=in.(${toReactivate.join(',')})`, { actif: true });
+    }
+    log.push(`Joueurs désactivés : ${toDeactivate.length}, réactivés : ${toReactivate.length}`);
 
     console.log('Sync done:', log.join(' | '));
     return { statusCode: 200, body: log.join('\n') };
