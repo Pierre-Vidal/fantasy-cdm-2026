@@ -150,9 +150,7 @@ function injectBracketStyles() {
     .bm-badge { font-size:.57rem; padding:1px 5px; border-radius:4px; font-weight:700; margin-left:4px; flex-shrink:0; }
     .bm-live { background:rgba(248,81,73,.25); color:var(--red); }
     .bm-pen  { background:rgba(240,136,62,.2); color:var(--orange); }
-    .b-conn-line { position:absolute; border-color:rgba(255,255,255,.16); }
-    .b-conn-h { border-top:1.5px solid; height:0; }
-    .b-conn-v { border-right:1.5px solid; width:0; }
+    .b-col-connectors svg { position:absolute; top:0; left:0; overflow:visible; }
     .b-3rd-block { margin-top:28px; padding-top:16px; border-top:1px dashed var(--border); }
   `;
   document.head.appendChild(s);
@@ -254,22 +252,25 @@ function renderFinale() {
 
     if (ci < mainOrder.length - 1) {
       const nextCol = colPositions[ci + 1];
-      let connHtml = '';
+      const connW = 24;
+      // Une polyline en "accolade" par paire : horizontal-gauche, vertical, horizontal-droit,
+      // dessinée en un seul <path> pour éviter tout décalage de jonction entre segments.
+      let paths = '';
       for (let i = 0; i < nextCol.length; i++) {
         const a = col[i * 2], b = col[i * 2 + 1];
         if (!a) continue;
-        const yA = a.top + BM_HEIGHT / 2;
-        const yB = b ? b.top + BM_HEIGHT / 2 : yA;
+        const yA   = a.top + BM_HEIGHT / 2;
+        const yB   = b ? b.top + BM_HEIGHT / 2 : yA;
         const yMid = (yA + yB) / 2;
-        const top = Math.min(yA, yB), bottom = Math.max(yA, yB);
-        connHtml += `
-          <div class="b-conn-line b-conn-h" style="top:${yA}px;left:0;width:12px"></div>
-          ${b ? `
-          <div class="b-conn-line b-conn-h" style="top:${yB}px;left:0;width:12px"></div>
-          <div class="b-conn-line b-conn-v" style="top:${top}px;left:12px;height:${bottom - top}px"></div>` : ''}
-          <div class="b-conn-line b-conn-h" style="top:${yMid}px;left:12px;width:12px"></div>`;
+        paths += `<path d="M0,${yA} H${connW / 2} V${yMid} H${connW}" fill="none" />`;
+        if (b) paths += `<path d="M0,${yB} H${connW / 2} V${yMid}" fill="none" />`;
       }
-      html += `<div class="b-col-connectors" style="height:${maxHeight}px">${connHtml}</div>`;
+      html += `
+        <div class="b-col-connectors" style="height:${maxHeight}px;width:${connW}px">
+          <svg width="${connW}" height="${maxHeight}" stroke="rgba(255,255,255,.22)" stroke-width="1.5">
+            ${paths}
+          </svg>
+        </div>`;
     }
   });
   html += '</div></div>';
