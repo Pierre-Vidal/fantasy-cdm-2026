@@ -14,11 +14,13 @@ const BAREME = {
   ATT: { moins60: 1, min60: 2, but: 4, passe: 3, cleanSheet: 0, arrets3: 0, penArrete:  0, penManque: -2, butEnc2:  0, jaune: -1, rouge: -3, csc: -2 },
 };
 
+// L'API renvoie tantôt le nom complet, tantôt l'abréviation à une lettre
+// selon les matchs — on couvre les deux formats.
 const MAP_POSTE = {
-  Goalkeeper: 'GAR',
-  Defender:   'DEF',
-  Midfielder: 'MIL',
-  Attacker:   'ATT',
+  Goalkeeper: 'GAR', G: 'GAR',
+  Defender:   'DEF', D: 'DEF',
+  Midfielder: 'MIL', M: 'MIL',
+  Attacker:   'ATT', F: 'ATT',
 };
 
 // ── API-Football ──────────────────────────────────────────────
@@ -224,8 +226,8 @@ exports.handler = async function () {
     log.push(`Nouveaux matchs FT : ${toProcess.length}`);
 
     if (toProcess.length > 0) {
-      const joueurRows = await sbSelect('joueurs', 'id');
-      const joueurIds  = new Set(joueurRows.map(j => j.id));
+      const joueurRows = await sbSelect('joueurs', 'id,poste');
+      const posteById   = new Map(joueurRows.map(j => [j.id, j.poste]));
 
       for (const fixture of toProcess) {
         const fid = fixture.fixture.id;
@@ -239,9 +241,12 @@ exports.handler = async function () {
               const p = entry.player;
               const s = entry.statistics?.[0];
               if (!s || !p?.id) return;
+              if (!posteById.has(p.id)) return; // FK guard
 
               const minutes       = s.games?.minutes       || 0;
-              const poste         = MAP_POSTE[s.games?.position] || 'MIL';
+              // Le poste stocké en base (importé une fois, fiable) prime sur celui de
+              // l'API — qui alterne entre nom complet et abréviation selon les matchs.
+              const poste         = posteById.get(p.id) || MAP_POSTE[s.games?.position] || 'MIL';
               const buts          = s.goals?.total          || 0;
               const passes        = s.goals?.assists        || 0;
               const arrets        = s.goalkeeper?.saves     || 0;
@@ -252,8 +257,6 @@ exports.handler = async function () {
               const rouge         = s.cards?.red            || 0;
               const csc           = s.goals?.owngoals       || 0;
               const cleanSheet    = butsEncaisses === 0 && minutes >= 60 && (poste === 'GAR' || poste === 'DEF');
-
-              if (!joueurIds.has(p.id)) return; // FK guard
 
               statsRows.push({
                 fixture_id:     fid,
