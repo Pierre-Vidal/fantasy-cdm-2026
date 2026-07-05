@@ -288,6 +288,23 @@ exports.handler = async function () {
     const allStats      = await sbSelect('stats', 'fixture_id,joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc,joueurs(poste)');
     const equipeJoueurs = await sbSelect('equipe_joueurs', 'equipe_id,joueur_id');
 
+    // Recalcule clean_sheet à partir du poste réel (fiable) plutôt que celui
+    // stocké sur la ligne stats, qui a pu être mal déduit à l'insertion si
+    // l'API renvoyait le format abrégé (ex: gardiens classés "MIL" par erreur).
+    const clean_sheet_fixes = [];
+    allStats.forEach(stat => {
+      const poste = stat.joueurs?.poste || 'MIL';
+      const correct = stat.buts_encaisses === 0 && stat.minutes >= 60 && (poste === 'GAR' || poste === 'DEF');
+      if (correct !== stat.clean_sheet) {
+        stat.clean_sheet = correct;
+        clean_sheet_fixes.push({ fixture_id: stat.fixture_id, joueur_id: stat.joueur_id, clean_sheet: correct });
+      }
+    });
+    for (let i = 0; i < clean_sheet_fixes.length; i += 500) {
+      await sbUpsert('stats', clean_sheet_fixes.slice(i, i + 500), 'fixture_id,joueur_id');
+    }
+    if (clean_sheet_fixes.length) log.push(`Clean sheets corrigés : ${clean_sheet_fixes.length}`);
+
     if (equipeJoueurs.length === 0 || allStats.length === 0) {
       log.push('Points : rien à calculer (pas d\'équipes ou de stats)');
     } else {
