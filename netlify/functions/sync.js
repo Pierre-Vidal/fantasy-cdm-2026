@@ -64,12 +64,25 @@ async function sbUpsert(table, rows, onConflict) {
   }
 }
 
-async function sbSelect(table, select, filter, limit = 5000) {
-  let url = sbUrl(`${table}?select=${select}&limit=${limit}`);
+// PostgREST plafonne chaque requête à 1000 lignes côté serveur, quel que soit
+// le `limit` demandé — on pagine donc avec Range jusqu'à épuisement des lignes.
+async function sbSelect(table, select, filter) {
+  let url = sbUrl(`${table}?select=${select}`);
   if (filter) url += '&' + filter;
-  const res = await fetch(url, { headers: sbHeaders() });
-  if (!res.ok) throw new Error(`sbSelect ${table}: ${res.status}`);
-  return res.json();
+
+  const all  = [];
+  const size = 1000;
+  let page   = 0;
+  while (true) {
+    const from = page * size, to = from + size - 1;
+    const res  = await fetch(url, { headers: { ...sbHeaders(), 'Range': `${from}-${to}` } });
+    if (!res.ok && res.status !== 206) throw new Error(`sbSelect ${table}: ${res.status}`);
+    const rows = await res.json();
+    all.push(...rows);
+    if (rows.length < size) break;
+    page++;
+  }
+  return all;
 }
 
 async function sbUpdate(table, filter, patch) {
@@ -211,7 +224,7 @@ exports.handler = async function () {
     log.push(`Nouveaux matchs FT : ${toProcess.length}`);
 
     if (toProcess.length > 0) {
-      const joueurRows = await sbSelect('joueurs', 'id', null, 2000);
+      const joueurRows = await sbSelect('joueurs', 'id');
       const joueurIds  = new Set(joueurRows.map(j => j.id));
 
       for (const fixture of toProcess) {
@@ -269,7 +282,7 @@ exports.handler = async function () {
     console.log('Step 3: recalculating all points...');
 
     // Stats avec le poste du joueur (join joueurs)
-    const allStats      = await sbSelect('stats', 'fixture_id,joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc,joueurs(poste)', null, 5000);
+    const allStats      = await sbSelect('stats', 'fixture_id,joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc,joueurs(poste)');
     const equipeJoueurs = await sbSelect('equipe_joueurs', 'equipe_id,joueur_id');
 
     if (equipeJoueurs.length === 0 || allStats.length === 0) {
@@ -312,7 +325,7 @@ exports.handler = async function () {
     const eliminatedNations = computeEliminatedNations(fixtureRows);
     log.push(`Nations éliminées : ${eliminatedNations.size ? [...eliminatedNations].join(', ') : 'aucune'}`);
 
-    const allJoueurs = await sbSelect('joueurs', 'id,nation,actif', null, 5000);
+    const allJoueurs = await sbSelect('joueurs', 'id,nation,actif');
     const toDeactivate = allJoueurs.filter(j => eliminatedNations.has(j.nation) && j.actif !== false).map(j => j.id);
     const toReactivate = allJoueurs.filter(j => !eliminatedNations.has(j.nation) && j.actif === false).map(j => j.id);
 
