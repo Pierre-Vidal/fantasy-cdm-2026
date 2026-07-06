@@ -412,11 +412,44 @@ async function connecterRapide() {
     chargerBaremeRapide();
     initMultiplicateurs();
     initEquipeLibre();
+    chargerFixturesDone();
   } catch(e) {
     showToast(e.message, 'error');
     document.getElementById('rapide-panel').style.display = 'none';
   }
 }
+
+async function chargerFixturesDone() {
+  const sel = document.getElementById('reset-fixture-select');
+  if (!sel) return;
+  try {
+    const { fixtures } = await adminAction('list_fixtures_done', {});
+    sel.innerHTML = '<option value="">— Choisir un match —</option>' +
+      fixtures.map(f => {
+        const date = f.date_heure ? new Date(f.date_heure).toLocaleDateString('fr-FR') : '';
+        return `<option value="${f.id}">[${f.round}] ${esc(f.home_name)} vs ${esc(f.away_name)}${date ? ' (' + date + ')' : ''}</option>`;
+      }).join('');
+  } catch {}
+}
+
+async function resetPointsMatch() {
+  const sel = document.getElementById('reset-fixture-select');
+  const fixtureId = sel?.value;
+  const resultEl  = document.getElementById('reset-fixture-result');
+  if (!fixtureId) { showToast('Choisis un match', 'error'); return; }
+  const label = sel.options[sel.selectedIndex].text;
+  if (!confirm(`Supprimer tous les points pour :\n${label} ?`)) return;
+  resultEl.innerHTML = '<span style="color:var(--muted)">Suppression…</span>';
+  try {
+    await adminAction('reset_points_fixture', { fixture_id: Number(fixtureId) });
+    resultEl.innerHTML = `<span style="color:var(--green)">✓ Points supprimés pour le match ${esc(label)}</span>`;
+    showToast('Points supprimés ✓', 'success');
+  } catch(e) {
+    resultEl.innerHTML = `<span style="color:var(--red)">${esc(e.message)}</span>`;
+    showToast(e.message, 'error');
+  }
+}
+
 
 async function chargerBaremeRapide() {
   await loadBareme();

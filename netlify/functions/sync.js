@@ -216,14 +216,15 @@ exports.handler = async function () {
 
     // ── Étape 2 : Nouvelles stats depuis l'API ────────────────
     // On ne fait des appels API que pour les matchs pas encore en DB
-    const ftFixtures    = fixtures.filter(f => f.fixture.status?.short === 'FT');
+    const doneStatuses  = new Set(['FT', 'AET', 'PEN']);
+    const ftFixtures    = fixtures.filter(f => doneStatuses.has(f.fixture.status?.short));
     const existingStats = await sbSelect('stats', 'fixture_id');
     const doneIds       = new Set(existingStats.map(s => s.fixture_id));
     const toProcess     = ftFixtures
       .filter(f => !doneIds.has(f.fixture.id))
       .slice(0, MAX_NEW_FIXTURES_PER_RUN);
 
-    log.push(`Nouveaux matchs FT : ${toProcess.length}`);
+    log.push(`Nouveaux matchs terminés : ${toProcess.length}`);
 
     if (toProcess.length > 0) {
       const joueurRows = await sbSelect('joueurs', 'id,poste');
@@ -237,6 +238,12 @@ exports.handler = async function () {
           const statsRows  = [];
 
           playerData.forEach(teamEntry => {
+            // Buts encaissés par cette équipe = buts marqués par l'adversaire
+            const isHomeTeam       = teamEntry.team.id === fixture.teams.home.id;
+            const teamGoalsConceded = isHomeTeam
+              ? (fixture.goals?.away ?? null)
+              : (fixture.goals?.home ?? null);
+
             (teamEntry.players || []).forEach(entry => {
               const p = entry.player;
               const s = entry.statistics?.[0];
@@ -252,11 +259,11 @@ exports.handler = async function () {
               const arrets        = s.goalkeeper?.saves     || 0;
               const penArrete     = s.penalty?.saved        || 0;
               const penManque     = s.penalty?.missed       || 0;
-              const butsEncaisses = s.goals?.conceded       || 0;
+              const butsEncaisses = teamGoalsConceded ?? 0;
               const jaune         = s.cards?.yellow         || 0;
               const rouge         = s.cards?.red            || 0;
               const csc           = s.goals?.owngoals       || 0;
-              const cleanSheet    = butsEncaisses === 0 && minutes >= 60 && (poste === 'GAR' || poste === 'DEF');
+              const cleanSheet    = teamGoalsConceded === 0 && minutes >= 60 && (poste === 'GAR' || poste === 'DEF' || poste === 'MIL');
 
               statsRows.push({
                 fixture_id:     fid,
@@ -285,25 +292,40 @@ exports.handler = async function () {
     console.log('Step 3: recalculating all points...');
 
     // Stats avec le poste du joueur (join joueurs)
-    const allStats      = await sbSelect('stats', 'fixture_id,joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc,joueurs(poste)');
+    const allStats      = await sbSelect('stats', 'fixture_id,joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc,joueurs(poste,nation)');
     const equipeJoueurs = await sbSelect('equipe_joueurs', 'equipe_id,joueur_id');
 
-    // Recalcule clean_sheet à partir du poste réel (fiable) plutôt que celui
-    // stocké sur la ligne stats, qui a pu être mal déduit à l'insertion si
-    // l'API renvoyait le format abrégé (ex: gardiens classés "MIL" par erreur).
+    // Recalcule clean_sheet depuis les scores réels des matchs (fiable)
+    // plutôt que depuis buts_encaisses stocké qui peut être corrompu (null→0).
+    const allFixturesCS = await sbSelect('fixtures', 'id,home_name,away_name,home_goals,away_goals', 'status=in.(FT,AET,PEN)');
+    const fixtureCSMap  = {};
+    allFixturesCS.forEach(f => { fixtureCSMap[f.id] = f; });
+
     const clean_sheet_fixes = [];
     allStats.forEach(stat => {
-      const poste = stat.joueurs?.poste || 'MIL';
-      const correct = stat.buts_encaisses === 0 && stat.minutes >= 60 && (poste === 'GAR' || poste === 'DEF');
-      if (correct !== stat.clean_sheet) {
-        stat.clean_sheet = correct;
-        clean_sheet_fixes.push({ fixture_id: stat.fixture_id, joueur_id: stat.joueur_id, clean_sheet: correct });
+      const poste   = stat.joueurs?.poste   || 'MIL';
+      const nation  = stat.joueurs?.nation  || '';
+      const fixture = fixtureCSMap[stat.fixture_id];
+
+      let teamGoalsConceded = null;
+      if (fixture && nation) {
+        if (nation === fixture.home_name)      teamGoalsConceded = fixture.away_goals;
+        else if (nation === fixture.away_name) teamGoalsConceded = fixture.home_goals;
+      }
+
+      const correct       = teamGoalsConceded === 0 && stat.minutes >= 60 && (poste === 'GAR' || poste === 'DEF' || poste === 'MIL');
+      const correctEnc    = teamGoalsConceded ?? stat.buts_encaisses;
+      const encChanged    = teamGoalsConceded !== null && correctEnc !== stat.buts_encaisses;
+      if (correct !== stat.clean_sheet || encChanged) {
+        stat.clean_sheet      = correct;
+        stat.buts_encaisses   = correctEnc;
+        clean_sheet_fixes.push({ fixture_id: stat.fixture_id, joueur_id: stat.joueur_id, clean_sheet: correct, buts_encaisses: correctEnc });
       }
     });
     for (let i = 0; i < clean_sheet_fixes.length; i += 500) {
       await sbUpsert('stats', clean_sheet_fixes.slice(i, i + 500), 'fixture_id,joueur_id');
     }
-    if (clean_sheet_fixes.length) log.push(`Clean sheets corrigés : ${clean_sheet_fixes.length}`);
+    if (clean_sheet_fixes.length) log.push(`Clean sheets / buts enc. corrigés : ${clean_sheet_fixes.length}`);
 
     if (equipeJoueurs.length === 0 || allStats.length === 0) {
       log.push('Points : rien à calculer (pas d\'équipes ou de stats)');

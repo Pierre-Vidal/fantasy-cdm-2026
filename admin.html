@@ -45,6 +45,17 @@
       <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">⚡ Multiplicateurs phase finale</div>
       <div id="mult-ui"><div style="color:var(--muted);font-size:0.8rem">Chargement…</div></div>
 
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🗑️ Reset points d'un match</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Supprime tous les points pour un match donné (utile avant un re-sync).</p>
+      <div style="display:flex;gap:8px;margin-bottom:8px;flex-wrap:wrap">
+        <select id="reset-fixture-select" style="flex:1;font-size:0.8rem;min-width:200px">
+          <option value="">— Choisir un match —</option>
+        </select>
+        <button class="btn btn-danger btn-sm" onclick="resetPointsMatch()">🗑️ Reset</button>
+      </div>
+      <div id="reset-fixture-result" style="font-size:0.78rem"></div>
+
+
       <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🎴 Pack de joueurs</div>
       <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Ouvre un pack de 5 joueurs aléatoires avec effets de rareté.</p>
       <button class="btn btn-primary btn-sm" onclick="ouvrirPackModal()">🎴 Ouvrir un pack</button>

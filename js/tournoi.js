@@ -22,10 +22,10 @@ async function init() {
     if (fixtRes.error) throw fixtRes.error;
     allFixtures = fixtRes.data || [];
     multConfig  = multRes.data?.value || null;
-    tabLoaded.finale = false;
-    renderTab('finale');
+    tabLoaded.groupes = false;
+    renderTab('groupes');
   } catch(e) {
-    document.getElementById('finale-content').innerHTML = `<div class="error-state">Erreur : ${e.message}</div>`;
+    document.getElementById('groupes-content').innerHTML = `<div class="error-state">Erreur : ${e.message}</div>`;
   }
 }
 
@@ -119,9 +119,6 @@ function renderGroupes() {
 }
 
 // ── Bracket styles ────────────────────────────────────────
-const BM_HEIGHT = 76;   // hauteur d'une carte match (2 lignes d'équipe + séparateur)
-const BM_GAP0   = 22;   // espacement vertical entre 2 matchs au 1er tour affiché
-
 function injectBracketStyles() {
   if (document.getElementById('bracket-styles')) return;
   const s = document.createElement('style');
@@ -129,16 +126,16 @@ function injectBracketStyles() {
   s.textContent = `
     .bracket-outer { overflow-x:auto; padding:8px 0 24px; -webkit-overflow-scrolling:touch; }
     .bracket-scroll { display:flex; gap:0; min-width:max-content; align-items:flex-start; padding:0 8px; }
-    .b-col { flex-shrink:0; width:222px; display:flex; flex-direction:column; }
+    .b-col { flex-shrink:0; width:220px; display:flex; flex-direction:column; }
     .b-col-header { text-align:center; padding:10px 8px 14px; display:flex; flex-direction:column; align-items:center; gap:4px; }
     .b-col-label { font-size:.7rem; font-weight:700; text-transform:uppercase; letter-spacing:.1em; }
     .b-col-mult { font-size:.64rem; font-weight:700; padding:2px 8px; border-radius:20px; background:rgba(255,255,255,.07); letter-spacing:.05em; }
-    .b-col-games { position:relative; flex:1; }
-    .b-col-connectors { position:relative; width:24px; flex-shrink:0; }
-    .bm-wrap { position:absolute; left:0; right:0; }
+    .b-col-games { display:flex; flex-direction:column; justify-content:space-around; flex:1; gap:10px; padding:0 8px 8px; }
+    .b-connector { flex-shrink:0; width:20px; display:flex; flex-direction:column; padding-top:48px; }
+    .b-connector-line { flex:1; border-top:1px solid rgba(255,255,255,.08); border-right:1px solid rgba(255,255,255,.08); border-bottom:1px solid rgba(255,255,255,.08); min-height:30px; }
     .bm { background:var(--surface); border:1px solid var(--border); border-radius:10px; overflow:hidden; transition:border-color .2s; }
     .bm:hover { border-color:rgba(88,166,255,.3); }
-    .bm-team { display:flex; align-items:center; gap:7px; padding:7px 10px; font-size:.78rem; height:19px; }
+    .bm-team { display:flex; align-items:center; gap:7px; padding:7px 10px; font-size:.78rem; }
     .bm-team.bm-winner { background:rgba(63,185,80,.08); font-weight:800; color:var(--green); }
     .bm-team.bm-loser  { opacity:.45; }
     .bm-team.bm-tbd    { color:var(--muted); font-style:italic; }
@@ -150,8 +147,6 @@ function injectBracketStyles() {
     .bm-badge { font-size:.57rem; padding:1px 5px; border-radius:4px; font-weight:700; margin-left:4px; flex-shrink:0; }
     .bm-live { background:rgba(248,81,73,.25); color:var(--red); }
     .bm-pen  { background:rgba(240,136,62,.2); color:var(--orange); }
-    .b-col-connectors svg { position:absolute; top:0; left:0; overflow:visible; }
-    .b-3rd-block { margin-top:28px; padding-top:16px; border-top:1px dashed var(--border); }
   `;
   document.head.appendChild(s);
 }
@@ -217,77 +212,29 @@ function renderFinale() {
 
   present.forEach(k => buckets[k].sort((a,b) => (a.date_heure||'').localeCompare(b.date_heure||'')));
 
-  // Le match pour la 3e place ne fait pas partie de l'arbre principal (il se
-  // joue en parallèle des demies/finale) — on l'affiche à part, sous le bracket.
-  const mainOrder = present.filter(k => k !== '3rd');
-  const has3rd    = present.includes('3rd');
-
-  // ── Calcul des hauteurs/positions : chaque colonne double l'espacement
-  // vertical de la précédente, et chaque match est centré sur sa paire amont.
-  const unit = BM_HEIGHT + BM_GAP0; // hauteur d'un "slot" au 1er tour affiché
-  const colPositions = mainOrder.map((k, ci) => {
-    const games     = buckets[k];
-    const slotH     = unit * Math.pow(2, ci);
-    const firstTop  = slotH / 2 - BM_HEIGHT / 2;
-    return games.map((f, i) => ({ f, top: firstTop + i * slotH }));
-  });
-  const maxHeight = Math.max(...colPositions.map(col =>
-    col.length ? col[col.length - 1].top + BM_HEIGHT : BM_HEIGHT));
-
   let html = '<div class="bracket-outer"><div class="bracket-scroll">';
-  mainOrder.forEach((k, ci) => {
-    const meta = ROUND_META[k];
-    const col  = colPositions[ci];
-
+  present.forEach((k, ci) => {
+    const meta  = ROUND_META[k];
+    const games = buckets[k];
     html += `
       <div class="b-col">
         <div class="b-col-header">
           <span class="b-col-label" style="color:${meta.color}">${meta.label}</span>
           ${meta.mult ? `<span class="b-col-mult" style="color:${meta.color};border:1px solid ${meta.color}44">⚡ ${meta.mult}</span>` : ''}
         </div>
-        <div class="b-col-games" style="height:${maxHeight}px">
-          ${col.map(({ f, top }) => `<div class="bm-wrap" style="top:${top}px">${bracketMatchCard(f)}</div>`).join('')}
+        <div class="b-col-games">
+          ${games.map(f => bracketMatchCard(f)).join('')}
         </div>
       </div>`;
-
-    if (ci < mainOrder.length - 1) {
-      const nextCol = colPositions[ci + 1];
-      const connW = 24;
-      // Une polyline en "accolade" par paire : horizontal-gauche, vertical, horizontal-droit,
-      // dessinée en un seul <path> pour éviter tout décalage de jonction entre segments.
-      let paths = '';
-      for (let i = 0; i < nextCol.length; i++) {
-        const a = col[i * 2], b = col[i * 2 + 1];
-        if (!a) continue;
-        const yA   = a.top + BM_HEIGHT / 2;
-        const yB   = b ? b.top + BM_HEIGHT / 2 : yA;
-        const yMid = (yA + yB) / 2;
-        paths += `<path d="M0,${yA} H${connW / 2} V${yMid} H${connW}" fill="none" />`;
-        if (b) paths += `<path d="M0,${yB} H${connW / 2} V${yMid}" fill="none" />`;
-      }
-      html += `
-        <div class="b-col-connectors" style="height:${maxHeight}px;width:${connW}px">
-          <svg width="${connW}" height="${maxHeight}" stroke="rgba(255,255,255,.22)" stroke-width="1.5">
-            ${paths}
-          </svg>
-        </div>`;
+    if (ci < present.length - 1) {
+      const nextGames = buckets[present[ci + 1]] || [];
+      const pairs = Math.max(1, Math.ceil(Math.min(games.length, nextGames.length * 2) / 2));
+      let connHtml = '';
+      for (let i = 0; i < pairs; i++) connHtml += `<div class="b-connector-line"></div>`;
+      html += `<div class="b-connector">${connHtml}</div>`;
     }
   });
   html += '</div></div>';
-
-  if (has3rd) {
-    const meta = ROUND_META['3rd'];
-    html += `
-      <div class="b-3rd-block">
-        <div class="b-col-header" style="text-align:left;padding-left:4px">
-          <span class="b-col-label" style="color:${meta.color}">${meta.label}</span>
-        </div>
-        <div style="max-width:222px">
-          ${buckets['3rd'].map(f => bracketMatchCard(f)).join('')}
-        </div>
-      </div>`;
-  }
-
   el.innerHTML = html;
 }
 
