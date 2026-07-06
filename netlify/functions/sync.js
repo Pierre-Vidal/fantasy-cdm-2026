@@ -119,31 +119,64 @@ function computeEliminatedNations(fixtures) {
     if (loser) eliminated.add(loser);
   });
 
-  // 2. 4e de poule dans les groupes terminés
-  const groupMap = {};
-  fixtures.filter(f => f.round?.toLowerCase().includes('group')).forEach(f => {
-    const played = ['FT', 'AET', 'PEN'].includes(f.status);
-    if (!played || !f.home_name || !f.away_name || f.home_goals == null || f.away_goals == null) return;
-    const g = f.round;
-    if (!groupMap[g]) groupMap[g] = {};
-    if (!groupMap[g][f.home_name]) groupMap[g][f.home_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
-    if (!groupMap[g][f.away_name]) groupMap[g][f.away_name] = { j: 0, pts: 0, bp: 0, bc: 0 };
-    const h = groupMap[g][f.home_name], a = groupMap[g][f.away_name];
-    h.j++; a.j++;
-    h.bp += f.home_goals; h.bc += f.away_goals;
-    a.bp += f.away_goals; a.bc += f.home_goals;
-    if (f.home_goals > f.away_goals)      { h.pts += 3; }
-    else if (f.away_goals > f.home_goals) { a.pts += 3; }
-    else                                   { h.pts += 1; a.pts += 1; }
-  });
-  Object.values(groupMap).forEach(teams => {
-    const list = Object.entries(teams);
-    if (list.length < 4 || list.some(([, t]) => t.j < 3)) return; // groupe incomplet
-    list.sort(([, a], [, b]) =>
-      b.pts - a.pts || (b.bp - b.bc) - (a.bp - a.bc) || b.bp - a.bp
-    );
-    if (list[3]) eliminated.add(list[3][0]);
-  });
+  // 2. Équipes du groupe absentes du Round of 32
+  // En CDM 2026 le round s'appelle "Group Stage - 1/2/3" (journée, pas lettre de groupe).
+  // On ne peut donc pas calculer les classements par poule depuis le round seul.
+  // Approche fiable : dès que les fixtures du Round of 32 existent, toute équipe
+  // qui a joué en poule mais n'y figure pas est éliminée (4e de groupe + 3e non qualifié).
+  const r32 = fixtures.filter(f => f.round === 'Round of 32');
+  if (r32.length > 0) {
+    const inR32 = new Set();
+    r32.forEach(f => { inR32.add(f.home_name); inR32.add(f.away_name); });
+
+    const playedGroup = new Set();
+    fixtures.filter(f => f.round?.toLowerCase().includes('group') && ['FT', 'AET', 'PEN'].includes(f.status))
+      .forEach(f => { playedGroup.add(f.home_name); playedGroup.add(f.away_name); });
+
+    playedGroup.forEach(team => { if (!inR32.has(team)) eliminated.add(team); });
+  } else {
+    // Fallback avant que le Round of 32 soit tiré au sort :
+    // on déduit les groupes réels par composantes connexes (qui a joué contre qui).
+    const adj = {};
+    fixtures.filter(f => f.round?.toLowerCase().includes('group') && ['FT', 'AET', 'PEN'].includes(f.status)
+      && f.home_name && f.away_name && f.home_goals != null && f.away_goals != null)
+      .forEach(f => {
+        if (!adj[f.home_name]) adj[f.home_name] = new Set();
+        if (!adj[f.away_name]) adj[f.away_name] = new Set();
+        adj[f.home_name].add(f.away_name);
+        adj[f.away_name].add(f.home_name);
+      });
+    const visited = new Set();
+    const realGroups = [];
+    Object.keys(adj).forEach(team => {
+      if (visited.has(team)) return;
+      const members = []; const queue = [team];
+      while (queue.length) {
+        const t = queue.shift(); if (visited.has(t)) continue;
+        visited.add(t); members.push(t);
+        (adj[t] || new Set()).forEach(n => { if (!visited.has(n)) queue.push(n); });
+      }
+      realGroups.push(members);
+    });
+    realGroups.forEach(members => {
+      if (members.length !== 4) return;
+      const st = {}; members.forEach(m => { st[m] = { j:0, pts:0, bp:0, bc:0 }; });
+      fixtures.filter(f => f.round?.toLowerCase().includes('group') && ['FT', 'AET', 'PEN'].includes(f.status))
+        .forEach(f => {
+          if (!st[f.home_name] || !st[f.away_name]) return;
+          st[f.home_name].j++; st[f.away_name].j++;
+          st[f.home_name].bp += f.home_goals; st[f.home_name].bc += f.away_goals;
+          st[f.away_name].bp += f.away_goals; st[f.away_name].bc += f.home_goals;
+          if (f.home_goals > f.away_goals)      st[f.home_name].pts += 3;
+          else if (f.away_goals > f.home_goals) st[f.away_name].pts += 3;
+          else { st[f.home_name].pts++; st[f.away_name].pts++; }
+        });
+      if (Object.values(st).some(t => t.j < 3)) return;
+      const sorted = Object.entries(st).sort(([,a],[,b]) =>
+        b.pts - a.pts || (b.bp-b.bc)-(a.bp-a.bc) || b.bp-a.bp);
+      if (sorted[3]) eliminated.add(sorted[3][0]);
+    });
+  }
 
   return eliminated;
 }
