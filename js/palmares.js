@@ -132,21 +132,58 @@ function initConfetti() {
 // Chargement des données
 // ─────────────────────────────────────────────────────────────
 async function loadData() {
-  const [equipes, fixtures, points, stats, joueurs, equipeJoueurs] = await Promise.all([
+  const [equipes, fixtures, points, stats, joueurs, equipeJoueurs, configRows] = await Promise.all([
     fetchAllDb(db.from('equipes').select('id,nom,officiel')),
     fetchAllDb(db.from('fixtures').select('id,round,date_heure,home_name,away_name,home_goals,away_goals,status')),
     fetchAllDb(db.from('points').select('equipe_id,fixture_id,joueur_id,points')),
-    fetchAllDb(db.from('stats').select('joueur_id,fixture_id,buts,passes,clean_sheet,minutes,arrets')),
+    fetchAllDb(db.from('stats').select('joueur_id,fixture_id,buts,passes,clean_sheet,minutes,arrets,buts_encaisses,pen_arrete,pen_manque,jaune,rouge,csc')),
     fetchAllDb(db.from('joueurs').select('id,nom,poste,nation,photo,valeur')),
     fetchAllDb(db.from('equipe_joueurs').select('equipe_id,joueur_id')),
+    fetchAllDb(db.from('config').select('key,value').eq('key','bareme')),
   ]);
-  return {equipes, fixtures, points, stats, joueurs, equipeJoueurs};
+  let bareme = null;
+  try { bareme = JSON.parse(configRows[0]?.value || 'null'); } catch {}
+  return {equipes, fixtures, points, stats, joueurs, equipeJoueurs, bareme};
+}
+
+// ─────────────────────────────────────────────────────────────
+// Calcul des points depuis les stats (TOUS les joueurs, pas
+// seulement ceux sélectionnés dans une équipe)
+// ─────────────────────────────────────────────────────────────
+function computeAllPtsJ(stats, joueurs, bareme) {
+  if(!bareme) return null;
+  const posteMap = {};
+  joueurs.forEach(j=>{ posteMap[j.id]=j.poste; });
+  const out = {};
+  stats.forEach(s=>{
+    const poste = posteMap[s.joueur_id];
+    if(!poste) return;
+    const b = bareme[poste] || bareme['MIL'];
+    if(!b) return;
+    let pts = 0;
+    if(s.minutes >= 60)       pts += b.min60   || 0;
+    else if(s.minutes > 0)    pts += b.moins60 || 0;
+    pts += (s.buts   || 0) * (b.but    || 0);
+    pts += (s.passes || 0) * (b.passe  || 0);
+    if(s.clean_sheet)         pts += b.cleanSheet || 0;
+    if(poste==='GAR' && (s.arrets||0)>=3) pts += Math.floor((s.arrets||0)/3)*(b.arrets3||0);
+    if(s.pen_arrete)          pts += b.penArrete || 0;
+    if(s.pen_manque)          pts += b.penManque || 0;
+    const bEnc = s.buts_encaisses||0;
+    if(bEnc>=2)               pts += Math.floor(bEnc/2)*(b.butEnc2||0);
+    if(s.jaune)               pts += b.jaune || 0;
+    if(s.rouge)               pts += b.rouge || 0;
+    pts += (s.csc||0)*(b.csc||0);
+    out[s.joueur_id] = (out[s.joueur_id]||0) + pts;
+  });
+  Object.keys(out).forEach(k=>{ out[k]=rnd(out[k]); });
+  return out;
 }
 
 // ─────────────────────────────────────────────────────────────
 // Traitement des données
 // ─────────────────────────────────────────────────────────────
-function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs}) {
+function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bareme}) {
   const done = fixtures.filter(f=>['FT','AET','PEN'].includes(f.status));
   const totalGoals  = done.reduce((s,f)=>s+(f.home_goals||0)+(f.away_goals||0),0);
   const totalPts    = rnd(points.reduce((s,p)=>s+p.points,0));
@@ -195,8 +232,11 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs}) {
   const bestF   = bestFId ? done.find(f=>f.id==bestFId) : null;
   const bestFPts= bestFId ? rnd(ptsF[bestFId]) : 0;
 
-  // Meilleure équipe théorique
-  const bestTeam = computeBestTeam(joueurs, ptsJ);
+  // Points TOUS joueurs (stats × barème, incluant non-sélectionnés)
+  const allPtsJ = computeAllPtsJ(stats, joueurs, bareme) || {};
+
+  // Meilleure équipe théorique (utilise allPtsJ pour inclure tous les joueurs)
+  const bestTeam = computeBestTeam(joueurs, allPtsJ);
 
   // Joueurs de l'équipe championne
   const winner = ranking[0] || null;
@@ -216,20 +256,34 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs}) {
   const matchCount = done.length;
   const avgPtsMatch = matchCount > 0 ? rnd(totalPts / matchCount) : 0;
 
-  // Top 5 par poste (pour les mentions honorables)
-  const topByPos = {};
-  ['GAR','DEF','MIL','ATT'].forEach(pos=>{
-    topByPos[pos]=joueurs
-      .filter(j=>j.poste===pos)
-      .map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0)}))
-      .filter(j=>j.totalPts>0)
-      .sort((a,b)=>b.totalPts-a.totalPts)
-      .slice(0,5);
+  // Classement des nations (TOUS joueurs, pas seulement sélectionnés)
+  const nationMap = {};
+  joueurs.forEach(j=>{
+    const n = j.nation||'Inconnu';
+    if(!nationMap[n]) nationMap[n]={nation:n,total:0,players:[]};
+    const pts = allPtsJ[j.id] || 0;
+    nationMap[n].total += pts;
+    nationMap[n].players.push({...j,totalPts:rnd(pts)});
+  });
+  const nationsRanking = Object.values(nationMap)
+    .map(n=>({...n,total:rnd(n.total),topPlayer:n.players.sort((a,b)=>b.totalPts-a.totalPts)[0]}))
+    .filter(n=>n.total>0)
+    .sort((a,b)=>b.total-a.total);
+
+  // Équipes par poste (pour mentions honorables — classement des ÉQUIPES FANTASY)
+  const equipesByPos = {};
+  ['ATT','MIL','DEF'].forEach(pos=>{
+    equipesByPos[pos]=ranking.map(eq=>{
+      const eqIds=new Set((equipeJoueurs||[]).filter(ej=>ej.equipe_id===eq.id).map(ej=>ej.joueur_id));
+      const posTotal=rnd(joueurs.filter(j=>eqIds.has(j.id)&&j.poste===pos).reduce((s,j)=>s+(ptsJ[j.id]||0),0));
+      return {...eq,posTotal};
+    }).filter(e=>e.posTotal>0).sort((a,b)=>b.posTotal-a.posTotal);
   });
 
-  return {equipes, joueurs, fixtures:done, ranking, ptsJ, ptsGrid,
-    totalGoals, totalPts, totalPasses, totalArrets, totalCS,
-    matchCount, avgPtsMatch, topByPos,
+  return {equipes, joueurs, fixtures:done, ranking, ptsJ, allPtsJ, ptsGrid,
+    totalGoals, totalPts, totalPasses, totalCS,
+    matchCount, avgPtsMatch,
+    nationsRanking, equipesByPos,
     topPerf, topScore, topCS2, bestF, bestFPts, bestTeam,
     winner, winnerPlayers};
 }
@@ -472,37 +526,40 @@ function pitchInner(pins) {
 
 function sMentionPos(poste, d) {
   const CFG={
-    ATT:{icon:'⚽',label:'Meilleurs attaquants',col:'#ff9e4a'},
-    MIL:{icon:'🎯',label:'Meilleurs milieux',   col:'#58c4dc'},
-    DEF:{icon:'🛡️',label:'Meilleure défense',   col:'#a0e6a0'},
+    ATT:{icon:'⚽',label:'Meilleure attaque',  sub:'Points cumulés des attaquants'},
+    MIL:{icon:'🎯',label:'Meilleur milieu',    sub:'Points cumulés des milieux'},
+    DEF:{icon:'🛡️',label:'Meilleure défense',  sub:'Points cumulés des défenseurs'},
   };
   const cfg=CFG[poste]; if(!cfg) return null;
-  const top=(d.topByPos[poste]||[]).slice(0,3);
+  const top=(d.equipesByPos[poste]||[]).slice(0,3);
   if(!top.length) return null;
   const medals=['🥇','🥈','🥉'], cols=[GOLD,SILVER,BRONZE];
+  const gradients=['g-gold','g-silver','g-bronze'];
 
   return {
     html:`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.2vw,24px);width:100%;max-width:680px">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.2vw,26px);width:100%;max-width:680px">
         <div class="t-eyebrow rv" data-d="0">${cfg.icon} ${cfg.label}</div>
-        <div style="display:flex;flex-direction:column;gap:clamp(7px,1.4vw,14px);width:100%">
-          ${top.map((j,i)=>`
-            <div class="rv" data-d="${.15+i*.2}" style="display:flex;align-items:center;gap:clamp(10px,2vw,20px);
-              background:rgba(238,242,255,${i===0?.065:.035});border:1px solid rgba(238,242,255,${i===0?.1:.06});
-              border-radius:14px;padding:clamp(10px,2vw,18px) clamp(14px,2.5vw,24px)">
-              <div style="font-size:clamp(1.4rem,3.5vw,2.6rem);flex-shrink:0">${medals[i]}</div>
-              <div class="player-photo" style="width:clamp(38px,6vw,56px);height:clamp(38px,6vw,56px);
-                font-size:1.1rem;flex-shrink:0;border-color:${cols[i]}">
-                ${j.photo?`<img src="${esc(j.photo)}" alt="${esc(j.nom)}" onerror="this.style.display='none'">`:
-                  `<span>${flag(j.nation)}</span>`}
-              </div>
+        <div style="font-size:clamp(.6rem,1.3vw,.78rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.3)" class="rv" data-d=".1">${cfg.sub}</div>
+        <div style="display:flex;flex-direction:column;gap:clamp(8px,1.6vw,16px);width:100%">
+          ${top.map((eq,i)=>`
+            <div class="rv" data-d="${.2+i*.22}" style="display:flex;align-items:center;gap:clamp(12px,2.5vw,24px);
+              background:rgba(238,242,255,${i===0?.07:.04});border:1px solid rgba(238,242,255,${i===0?.12:.07});
+              border-radius:16px;padding:clamp(12px,2.5vw,22px) clamp(16px,3vw,28px)">
+              <div style="font-size:clamp(2rem,5vw,3.5rem);flex-shrink:0;line-height:1">${medals[i]}</div>
               <div style="flex:1;text-align:left;min-width:0">
-                <div style="font-weight:700;font-size:clamp(.9rem,2vw,1.2rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(j.nom)}</div>
-                <div style="font-size:clamp(.6rem,1.2vw,.75rem);color:rgba(238,242,255,.4);margin-top:2px">${flag(j.nation)} ${esc(j.nation)}</div>
+                <div class="${gradients[i]}" style="font-family:'Impact','Arial Black',sans-serif;
+                  font-size:clamp(1.2rem,3.5vw,2.6rem);font-weight:900;text-transform:uppercase;
+                  letter-spacing:.02em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+                  ${esc(eq.nom)}
+                </div>
+                <div style="font-size:clamp(.55rem,1.1vw,.7rem);letter-spacing:.1em;text-transform:uppercase;color:rgba(238,242,255,.3);margin-top:2px">
+                  Équipe du tournoi
+                </div>
               </div>
               <div style="text-align:right;flex-shrink:0">
-                <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.6rem);color:${cols[i]};line-height:1">${j.totalPts}</div>
-                <div style="font-size:clamp(.5rem,1vw,.6rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.28)">pts</div>
+                <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.6rem,4.5vw,3.2rem);color:${cols[i]};line-height:1">${eq.posTotal}</div>
+                <div style="font-size:clamp(.5rem,1vw,.62rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.3)">pts</div>
               </div>
             </div>`).join('')}
         </div>
@@ -596,9 +653,54 @@ function sPodium(rank, d) {
         const m=el.querySelector('#podium-medal-'+rank);
         if(m){m.style.animation='none';void m.offsetHeight;m.style.animation='medalDrop .85s cubic-bezier(.34,1.56,.64,1) forwards';}
       },300);
-      if(isChamp) setTimeout(window._startConfetti||function(){},1000);
+      // Confetti uniquement pour le champion, avec annulation possible
+      if(isChamp) el._confettiTimer=setTimeout(()=>window._startConfetti?.(),800);
     },
-    onLeave(){ if(isChamp) window._stopConfetti?.(); }
+    onLeave(el){ if(isChamp){ clearTimeout(el?._confettiTimer); window._stopConfetti?.(); } }
+  };
+}
+
+function sNations(d) {
+  const top=(d.nationsRanking||[]).slice(0,12);
+  if(!top.length) return null;
+  const max=top[0].total||1;
+  const medals=['🥇','🥈','🥉'];
+  const cols=[GOLD,SILVER,BRONZE];
+
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.6vw,16px);width:100%;height:100%">
+        <div class="t-eyebrow rv" data-d="0">🌍 Classement des nations</div>
+        <div class="rv" data-d=".15" style="overflow-y:auto;width:100%;max-width:700px;flex:1;min-height:0">
+          <div style="display:flex;flex-direction:column;gap:clamp(4px,.8vw,8px)">
+            ${top.map((n,i)=>{
+              const barW=Math.round((n.total/max)*100);
+              const isTop3=i<3;
+              return `
+                <div style="display:flex;align-items:center;gap:clamp(8px,1.5vw,14px);
+                  background:rgba(238,242,255,${isTop3?.055:.025});
+                  border:1px solid rgba(238,242,255,${isTop3?.085:.045});
+                  border-radius:10px;padding:clamp(7px,1.3vw,12px) clamp(10px,2vw,18px)">
+                  <div style="font-size:clamp(.7rem,1.5vw,1rem);font-weight:700;color:${isTop3?cols[i]:'rgba(238,242,255,.3)'};min-width:1.6rem;text-align:center">
+                    ${isTop3?medals[i]:i+1}
+                  </div>
+                  <div style="font-size:clamp(1.1rem,2.5vw,1.6rem);flex-shrink:0">${flag(n.nation)}</div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:clamp(.78rem,1.6vw,.95rem);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(n.nation)}</div>
+                    <div style="margin-top:3px;height:3px;background:rgba(238,242,255,.06);border-radius:2px;overflow:hidden">
+                      <div style="height:100%;width:${barW}%;background:${isTop3?cols[i]:'rgba(238,242,255,.2)'};border-radius:2px"></div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1rem,2.5vw,1.5rem);color:${isTop3?cols[i]:'rgba(238,242,255,.7)'};line-height:1">${n.total}</div>
+                    <div style="font-size:clamp(.45rem,.85vw,.55rem);letter-spacing:.1em;text-transform:uppercase;color:rgba(238,242,255,.25)">pts</div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`,
+    onEnter(el){ reveal(el,80); }
   };
 }
 
@@ -824,6 +926,7 @@ function buildSlides(d) {
     sMerci(d),
     sChiffres(d),
     sRaceChart(d),
+    sNations(d),
     d.topScore ? sTopScorer(d) : null,
     sTopPerf(d),
     d.bestF ? sBestMatch(d) : null,
