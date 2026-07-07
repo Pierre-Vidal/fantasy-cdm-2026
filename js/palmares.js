@@ -216,30 +216,54 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs}) {
   const matchCount = done.length;
   const avgPtsMatch = matchCount > 0 ? rnd(totalPts / matchCount) : 0;
 
+  // Top 5 par poste (pour les mentions honorables)
+  const topByPos = {};
+  ['GAR','DEF','MIL','ATT'].forEach(pos=>{
+    topByPos[pos]=joueurs
+      .filter(j=>j.poste===pos)
+      .map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0)}))
+      .filter(j=>j.totalPts>0)
+      .sort((a,b)=>b.totalPts-a.totalPts)
+      .slice(0,5);
+  });
+
   return {equipes, joueurs, fixtures:done, ranking, ptsJ, ptsGrid,
     totalGoals, totalPts, totalPasses, totalArrets, totalCS,
-    matchCount, avgPtsMatch,
+    matchCount, avgPtsMatch, topByPos,
     topPerf, topScore, topCS2, bestF, bestFPts, bestTeam,
     winner, winnerPlayers};
 }
 
 function computeBestTeam(joueurs, ptsJ) {
-  const BUDGET=110, STRUCT=[['GAR',2],['DEF',5],['MIL',5],['ATT',3]];
+  // Formation obligatoire 2 GAR – 5 DEF – 5 MIL – 3 ATT = 15 joueurs
+  const STRUCT=[['GAR',2],['DEF',5],['MIL',5],['ATT',3]];
   const byPos={GAR:[],DEF:[],MIL:[],ATT:[]};
   joueurs.forEach(j=>{ if(byPos[j.poste]) byPos[j.poste].push({...j,totalPts:rnd(ptsJ[j.id]||0)}); });
   Object.values(byPos).forEach(a=>a.sort((x,y)=>y.totalPts-x.totalPts));
-  const sel=[], ids=new Set(); let left=BUDGET;
+
+  const sel=[], ids=new Set(); let left=110;
   for(const [pos,n] of STRUCT){
     let got=0;
+    // Passe 1 : meilleurs joueurs dans le budget
     for(const j of byPos[pos]){
       if(got>=n) break;
       if(ids.has(j.id)) continue;
       const cost=j.valeur||0;
       if(cost>0&&left-cost<0) continue;
-      ids.add(j.id); sel.push({...j,pos}); left-=cost; got++;
+      ids.add(j.id); sel.push({...j}); left-=cost; got++;
+    }
+    // Passe 2 : si slots manquants → prendre les moins chers (budget ignoré, 15 garantis)
+    if(got<n){
+      const byCost=[...byPos[pos]].sort((a,b)=>(a.valeur||0)-(b.valeur||0));
+      for(const j of byCost){
+        if(got>=n) break;
+        if(ids.has(j.id)) continue;
+        ids.add(j.id); sel.push({...j}); got++;
+      }
     }
   }
-  return {players:sel,spent:rnd(BUDGET-left)};
+  const spent=rnd(sel.reduce((s,j)=>s+(j.valeur||0),0));
+  return {players:sel, spent, total:rnd(sel.reduce((s,j)=>s+j.totalPts,0))};
 }
 
 // ─────────────────────────────────────────────────────────────
@@ -283,12 +307,12 @@ function sMerci(d) {
 
 function sChiffres(d) {
   const cards=[
-    {icon:'⚽', id:'cnt-g', val:d.totalGoals,   label:'Buts au total',       col:'#58c4dc'},
-    {icon:'🎯', id:'cnt-a', val:d.totalPasses,   label:'Passes décisives',    col:'#a0e6a0'},
-    {icon:'🧤', id:'cnt-r', val:d.totalArrets,   label:'Arrêts (gardiens)',   col:'#d8a2e8'},
-    {icon:'🔒', id:'cnt-c', val:d.totalCS,       label:'Matchs clean sheet',  col:'#82c9f5'},
-    {icon:'⭐', id:'cnt-p', val:d.totalPts,      label:'Points générés',      col:GOLD, deci:1},
-    {icon:'📊', id:'cnt-m', val:d.avgPtsMatch,   label:'Moy. pts / match',    col:'#ff9e4a', deci:1},
+    {icon:'🏟️', id:'cnt-mx', val:d.matchCount,   label:'Matchs suivis',       col:'#82c9f5'},
+    {icon:'⚽', id:'cnt-g',  val:d.totalGoals,   label:'Buts au total',       col:'#58c4dc'},
+    {icon:'🎯', id:'cnt-a',  val:d.totalPasses,  label:'Passes décisives',    col:'#a0e6a0'},
+    {icon:'🔒', id:'cnt-c',  val:d.totalCS,      label:'Matchs clean sheet',  col:'#d8a2e8'},
+    {icon:'⭐', id:'cnt-p',  val:d.totalPts,     label:'Points générés',      col:GOLD, deci:1},
+    {icon:'📊', id:'cnt-mm', val:d.avgPtsMatch,  label:'Moy. pts / match',    col:'#ff9e4a', deci:1},
   ];
   return {
     html:`
@@ -446,47 +470,87 @@ function pitchInner(pins) {
     <div class="p-box-t"></div><div class="p-box-b"></div>${pins}`;
 }
 
+function sMentionPos(poste, d) {
+  const CFG={
+    ATT:{icon:'⚽',label:'Meilleurs attaquants',col:'#ff9e4a'},
+    MIL:{icon:'🎯',label:'Meilleurs milieux',   col:'#58c4dc'},
+    DEF:{icon:'🛡️',label:'Meilleure défense',   col:'#a0e6a0'},
+  };
+  const cfg=CFG[poste]; if(!cfg) return null;
+  const top=(d.topByPos[poste]||[]).slice(0,3);
+  if(!top.length) return null;
+  const medals=['🥇','🥈','🥉'], cols=[GOLD,SILVER,BRONZE];
+
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.2vw,24px);width:100%;max-width:680px">
+        <div class="t-eyebrow rv" data-d="0">${cfg.icon} ${cfg.label}</div>
+        <div style="display:flex;flex-direction:column;gap:clamp(7px,1.4vw,14px);width:100%">
+          ${top.map((j,i)=>`
+            <div class="rv" data-d="${.15+i*.2}" style="display:flex;align-items:center;gap:clamp(10px,2vw,20px);
+              background:rgba(238,242,255,${i===0?.065:.035});border:1px solid rgba(238,242,255,${i===0?.1:.06});
+              border-radius:14px;padding:clamp(10px,2vw,18px) clamp(14px,2.5vw,24px)">
+              <div style="font-size:clamp(1.4rem,3.5vw,2.6rem);flex-shrink:0">${medals[i]}</div>
+              <div class="player-photo" style="width:clamp(38px,6vw,56px);height:clamp(38px,6vw,56px);
+                font-size:1.1rem;flex-shrink:0;border-color:${cols[i]}">
+                ${j.photo?`<img src="${esc(j.photo)}" alt="${esc(j.nom)}" onerror="this.style.display='none'">`:
+                  `<span>${flag(j.nation)}</span>`}
+              </div>
+              <div style="flex:1;text-align:left;min-width:0">
+                <div style="font-weight:700;font-size:clamp(.9rem,2vw,1.2rem);overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(j.nom)}</div>
+                <div style="font-size:clamp(.6rem,1.2vw,.75rem);color:rgba(238,242,255,.4);margin-top:2px">${flag(j.nation)} ${esc(j.nation)}</div>
+              </div>
+              <div style="text-align:right;flex-shrink:0">
+                <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.6rem);color:${cols[i]};line-height:1">${j.totalPts}</div>
+                <div style="font-size:clamp(.5rem,1vw,.6rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.28)">pts</div>
+              </div>
+            </div>`).join('')}
+        </div>
+      </div>`,
+    onEnter(el){ reveal(el,80); }
+  };
+}
+
 function sCompare(d) {
   if(!d.winner) return null;
-  const {players,spent}=d.bestTeam;
+  const {players,spent,total:bestTotal}=d.bestTeam;
   if(!players.length) return null;
 
   const wPins = makePins(d.winnerPlayers);
   const bPins = makePins(players);
 
-  // Pitch partagé inline: height-constrained, width auto via aspect-ratio
   const pitchStyle='height:100%;width:auto;max-width:100%;aspect-ratio:70/108;background:repeating-linear-gradient(180deg,#1d4d1d 0,#1d4d1d 26px,#214e21 26px,#214e21 52px);border:2px solid rgba(255,255,255,.45);border-radius:4px;position:relative';
   const wrapStyle='flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden';
 
   return {
     html:`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vw,12px);width:100%;height:100%">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(5px,1vw,10px);width:100%;height:100%">
         <div class="t-eyebrow rv" data-d="0">🏆 Équipe championne vs Meilleure équipe théorique</div>
         <div style="display:flex;gap:clamp(10px,2vw,24px);width:100%;flex:1;min-height:0">
 
-          <div class="rv" data-d=".15" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%">
-            <div class="t-lg g-gold" style="font-size:clamp(.9rem,2.2vw,1.8rem);text-transform:none;letter-spacing:.01em;text-align:center">${esc(d.winner.nom)}</div>
-            <div style="font-size:clamp(.5rem,1vw,.62rem);letter-spacing:.13em;text-transform:uppercase;color:rgba(238,242,255,.22)">Équipe du tournoi · ${d.winner.total} pts</div>
-            <div style="${wrapStyle}" id="w-wrap">
-              <div style="${pitchStyle}" id="w-pitch">${pitchInner(wPins)}</div>
+          <div class="rv" data-d=".15" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
+            <div class="t-lg g-gold" style="font-size:clamp(.85rem,2vw,1.7rem);text-transform:none;letter-spacing:.01em;text-align:center">${esc(d.winner.nom)}</div>
+            <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.8rem);color:${GOLD};line-height:1">${d.winner.total}<span style="font-size:.45em;color:rgba(238,242,255,.3);margin-left:6px">pts</span></div>
+            <div style="${wrapStyle}">
+              <div style="${pitchStyle}">${pitchInner(wPins)}</div>
             </div>
           </div>
 
-          <div class="rv" data-d=".05" style="align-self:center;color:rgba(238,242,255,.15);font-weight:900;font-size:clamp(.8rem,2vw,1.6rem);flex-shrink:0">VS</div>
+          <div class="rv" data-d=".05" style="align-self:center;color:rgba(238,242,255,.12);font-weight:900;font-size:clamp(.7rem,1.8vw,1.4rem);flex-shrink:0">VS</div>
 
-          <div class="rv" data-d=".25" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%">
-            <div class="t-lg c-gold" style="font-size:clamp(.9rem,2.2vw,1.8rem);text-transform:none;letter-spacing:.01em;text-align:center">Meilleure équipe</div>
-            <div style="font-size:clamp(.5rem,1vw,.62rem);letter-spacing:.13em;text-transform:uppercase;color:rgba(238,242,255,.22)">Budget 110M · ${spent}M utilisés</div>
-            <div style="${wrapStyle}" id="b-wrap">
-              <div style="${pitchStyle}" id="b-pitch">${pitchInner(bPins)}</div>
+          <div class="rv" data-d=".25" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:4px;height:100%">
+            <div class="t-lg" style="font-size:clamp(.85rem,2vw,1.7rem);text-transform:none;letter-spacing:.01em;text-align:center;color:rgba(238,242,255,.75)">Meilleure équipe théorique</div>
+            <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.8rem);color:${SILVER};line-height:1">${bestTotal}<span style="font-size:.45em;color:rgba(238,242,255,.3);margin-left:6px">pts</span></div>
+            <div style="${wrapStyle}">
+              <div style="${pitchStyle}">${pitchInner(bPins)}</div>
             </div>
           </div>
 
         </div>
       </div>`,
     onEnter(el){
-      reveal(el, 80);
-      setTimeout(()=>revealPins(el), 500);
+      reveal(el,80);
+      setTimeout(()=>revealPins(el),500);
     }
   };
 }
@@ -766,6 +830,9 @@ function buildSlides(d) {
     d.ranking[2] ? sPodium(3,d) : null,
     d.ranking[1] ? sPodium(2,d) : null,
     d.ranking[0] ? sPodium(1,d) : null,
+    sMentionPos('ATT',d),
+    sMentionPos('MIL',d),
+    sMentionPos('DEF',d),
     sCompare(d),
   ].filter(Boolean);
 

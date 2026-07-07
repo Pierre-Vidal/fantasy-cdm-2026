@@ -52,6 +52,7 @@ function buildNav(activePage) {
         <a href="bareme.html" class="${activePage === 'bareme' ? 'active' : ''}">⭐ Barème</a>
         <a href="tournoi.html" class="${activePage === 'tournoi' ? 'active' : ''}">🌍 Tournoi</a>
         <a href="graphiques.html" class="${activePage === 'graphiques' ? 'active' : ''}">📊 Stats</a>
+        <a href="nations.html" class="${activePage === 'nations' ? 'active' : ''}">🌍 Nations</a>
         <a href="patchnotes.html" class="${activePage === 'patchnotes' ? 'active' : ''}">📝</a>
         <a href="admin.html" class="${activePage === 'admin' ? 'active' : ''}">⚙️</a>
       </div>

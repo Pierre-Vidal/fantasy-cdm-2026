@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🌍 C'est quoi ce poulet ? — Classement des nations</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    .nations-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; }
+    .nations-table th,
+    .nations-table td { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+    .nations-table thead th {
+      background: var(--surface); position: sticky; top: 0; z-index: 2;
+      font-weight: 700; font-size: 0.75rem; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .05em; white-space: nowrap;
+    }
+    .nations-table tbody tr:hover td { background: var(--surface); }
+    .nations-table tbody tr { transition: background .12s; }
+
+    .rank-cell { font-weight: 700; color: var(--muted); text-align: center; width: 40px; font-variant-numeric: tabular-nums; }
+    .rank-1 { color: #e4a93c; font-size: 1.05rem; }
+    .rank-2 { color: #b2bec9; }
+    .rank-3 { color: #c97b3a; }
+
+    .nation-cell { display: flex; align-items: center; gap: 10px; }
+    .nation-flag { font-size: 1.5rem; line-height: 1; flex-shrink: 0; }
+    .nation-name { font-weight: 600; }
+
+    .pts-cell {
+      font-weight: 800; font-size: 1rem;
+      text-align: right; font-variant-numeric: tabular-nums;
+    }
+    .pts-bar-wrap {
+      width: clamp(60px, 12vw, 140px);
+      background: rgba(238,242,255,.06);
+      border-radius: 4px; height: 6px; overflow: hidden;
+    }
+    .pts-bar { height: 100%; border-radius: 4px; transition: width .4s ease; }
+    .nb-cell { text-align: right; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .pos-chips { display: flex; gap: 5px; flex-wrap: wrap; }
+
+    .podium-top {
+      display: grid; grid-template-columns: 1fr 1fr 1fr;
+      gap: clamp(8px, 2vw, 16px); margin-bottom: clamp(16px,3vw,28px);
+    }
+    .podium-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 14px; padding: clamp(12px,2.5vw,20px);
+      display: flex; flex-direction: column; align-items: center; gap: 6px;
+      text-align: center; position: relative; overflow: hidden;
+    }
+    .podium-card.rank-1-card { border-color: rgba(228,169,60,.35); background: rgba(228,169,60,.06); }
+    .podium-card.rank-2-card { border-color: rgba(178,190,201,.25); }
+    .podium-card.rank-3-card { border-color: rgba(201,123,58,.25); }
+    .podium-medal { font-size: clamp(1.6rem, 4vw, 2.4rem); }
+    .podium-flag  { font-size: clamp(2rem, 5vw, 3rem); line-height: 1.1; }
+    .podium-nation-name { font-weight: 700; font-size: clamp(.85rem, 2vw, 1.1rem); }
+    .podium-pts   { font-weight: 800; font-size: clamp(1.2rem, 3vw, 1.8rem); font-variant-numeric: tabular-nums; }
+    .podium-sub   { font-size: clamp(.62rem, 1.2vw, .75rem); color: var(--muted); }
+
+    .filter-bar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px; align-items: center; }
+    .filter-input { flex: 1; min-width: 160px; max-width: 280px; }
+    .pos-filter { display: flex; gap: 4px; }
+    .pos-btn {
+      padding: 4px 12px; border-radius: 999px; font-size: 0.75rem; font-weight: 600;
+      border: 1px solid var(--border); background: transparent; color: var(--muted);
+      cursor: pointer; transition: all .15s; letter-spacing: .04em;
+    }
+    .pos-btn.active, .pos-btn:hover { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+    @media (max-width: 500px) {
+      .podium-top { grid-template-columns: 1fr; }
+      .pts-bar-wrap { display: none; }
+    }
+  </style>
+</head>
+<body>
+<div id="nav-placeholder"></div>
+
+<div class="page">
+  <div class="page-header">
+    <div class="page-title">🌍 Classement des nations</div>
+    <div class="page-subtitle">Points fantasy générés par nation</div>
+  </div>
+
+  <div id="content">
+    <div class="empty-state"><div class="spinner" style="width:32px;height:32px;border-width:3px"></div></div>
+  </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/nations.js"></script>
+</body>
+</html>
