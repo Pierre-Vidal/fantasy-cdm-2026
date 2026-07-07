@@ -200,6 +200,31 @@ function buildModeToggle() {
   </div>`;
 }
 
+// ── Drapeaux (image via flagcdn.com, compatible Windows) ─────
+const NATION_ISO = {
+  'France':'fr','Spain':'es','Germany':'de','Portugal':'pt','Netherlands':'nl',
+  'Belgium':'be','England':'gb-eng','Italy':'it','Croatia':'hr','Switzerland':'ch',
+  'Brazil':'br','Argentina':'ar','Colombia':'co','Uruguay':'uy','Ecuador':'ec',
+  'Mexico':'mx','USA':'us','United States':'us','Canada':'ca','Morocco':'ma',
+  'Japan':'jp','South Korea':'kr','Australia':'au','Iran':'ir','Saudi Arabia':'sa',
+  'Qatar':'qa','Senegal':'sn','Nigeria':'ng','Egypt':'eg','South Africa':'za',
+  'Ghana':'gh','Tunisia':'tn','Algeria':'dz','Ivory Coast':'ci','Cameroon':'cm',
+  'Congo DR':'cd','Cape Verde Islands':'cv','Norway':'no','Sweden':'se','Denmark':'dk',
+  'Austria':'at','Poland':'pl','Serbia':'rs','Czechia':'cz','Slovakia':'sk',
+  'Hungary':'hu','Romania':'ro','Türkiye':'tr','Turkey':'tr','Greece':'gr',
+  'Bosnia & Herzegovina':'ba','Albania':'al','Georgia':'ge','Scotland':'gb-sct',
+  'Wales':'gb-wls','Ireland':'ie','Panama':'pa','Costa Rica':'cr','Jamaica':'jm',
+  'Haiti':'ht','Honduras':'hn','El Salvador':'sv','Curaçao':'cw',
+  'Trinidad & Tobago':'tt','Paraguay':'py','Bolivia':'bo','Peru':'pe','Chile':'cl',
+  'Iraq':'iq','Jordan':'jo','Uzbekistan':'uz','New Zealand':'nz','Indonesia':'id',
+  'Mali':'ml','Guinea':'gn','Angola':'ao','Benin':'bj','Venezuela':'ve',
+};
+function flagImg(nation) {
+  const iso = NATION_ISO[nation];
+  if (!iso) return '<span style="font-size:1em">🌍</span>';
+  return `<img src="https://flagcdn.com/w40/${iso}.png" alt="${nation}" style="height:1em;width:auto;vertical-align:middle;border-radius:2px;display:inline-block">`;
+}
+
 // ── Pagination Supabase (contourne la limite serveur de 1000 lignes) ──
 async function fetchAllDb(query) {
   const all = [];

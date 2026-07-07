@@ -1,26 +1,7 @@
 'use strict';
 document.getElementById('nav-placeholder').innerHTML = buildNav('nations');
 
-const FLAG_MAP_N = {
-  'France':'🇫🇷','Spain':'🇪🇸','Germany':'🇩🇪','Portugal':'🇵🇹','Netherlands':'🇳🇱',
-  'Belgium':'🇧🇪','England':'🏴󠁧󠁢󠁥󠁮󠁧󠁿','Italy':'🇮🇹','Croatia':'🇭🇷','Switzerland':'🇨🇭',
-  'Brazil':'🇧🇷','Argentina':'🇦🇷','Colombia':'🇨🇴','Uruguay':'🇺🇾','Ecuador':'🇪🇨',
-  'Mexico':'🇲🇽','USA':'🇺🇸','United States':'🇺🇸','Canada':'🇨🇦','Morocco':'🇲🇦',
-  'Japan':'🇯🇵','South Korea':'🇰🇷','Australia':'🇦🇺','Iran':'🇮🇷','Saudi Arabia':'🇸🇦',
-  'Qatar':'🇶🇦','Senegal':'🇸🇳','Nigeria':'🇳🇬','Egypt':'🇪🇬','South Africa':'🇿🇦',
-  'Ghana':'🇬🇭','Tunisia':'🇹🇳','Algeria':'🇩🇿','Ivory Coast':'🇨🇮','Cameroon':'🇨🇲',
-  'Congo DR':'🇨🇩','Cape Verde Islands':'🇨🇻','Norway':'🇳🇴','Sweden':'🇸🇪','Denmark':'🇩🇰',
-  'Austria':'🇦🇹','Poland':'🇵🇱','Serbia':'🇷🇸','Czechia':'🇨🇿','Slovakia':'🇸🇰',
-  'Hungary':'🇭🇺','Romania':'🇷🇴','Türkiye':'🇹🇷','Turkey':'🇹🇷','Greece':'🇬🇷',
-  'Bosnia & Herzegovina':'🇧🇦','Albania':'🇦🇱','Georgia':'🇬🇪','Scotland':'🏴󠁧󠁢󠁳󠁣󠁴󠁿',
-  'Wales':'🏴󠁧󠁢󠁷󠁬󠁳󠁿','Ireland':'🇮🇪','Panama':'🇵🇦','Costa Rica':'🇨🇷','Jamaica':'🇯🇲',
-  'Haiti':'🇭🇹','Honduras':'🇭🇳','El Salvador':'🇸🇻','Curaçao':'🇨🇼',
-  'Trinidad & Tobago':'🇹🇹','Paraguay':'🇵🇾','Bolivia':'🇧🇴','Peru':'🇵🇪','Chile':'🇨🇱',
-  'Iraq':'🇮🇶','Jordan':'🇯🇴','Uzbekistan':'🇺🇿','New Zealand':'🇳🇿','Indonesia':'🇮🇩',
-  'Mali':'🇲🇱','Guinea':'🇬🇳','Angola':'🇦🇴','Benin':'🇧🇯','Venezuela':'🇻🇪',
-};
-
-const flg = n => FLAG_MAP_N[n] || '🌍';
+const flg = flagImg;
 const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
 const rnd1 = n => Math.round(n * 10) / 10;
 
