@@ -132,24 +132,30 @@ function initConfetti() {
 // Chargement des données
 // ─────────────────────────────────────────────────────────────
 async function loadData() {
-  const [equipes, fixtures, points, stats, joueurs] = await Promise.all([
+  const [equipes, fixtures, points, stats, joueurs, equipeJoueurs] = await Promise.all([
     fetchAllDb(db.from('equipes').select('id,nom,officiel')),
     fetchAllDb(db.from('fixtures').select('id,round,date_heure,home_name,away_name,home_goals,away_goals,status')),
     fetchAllDb(db.from('points').select('equipe_id,fixture_id,joueur_id,points')),
     fetchAllDb(db.from('stats').select('joueur_id,fixture_id,buts,passes,clean_sheet,minutes,arrets')),
     fetchAllDb(db.from('joueurs').select('id,nom,poste,nation,photo,valeur')),
+    fetchAllDb(db.from('equipe_joueurs').select('equipe_id,joueur_id')),
   ]);
-  return {equipes, fixtures, points, stats, joueurs};
+  return {equipes, fixtures, points, stats, joueurs, equipeJoueurs};
 }
 
 // ─────────────────────────────────────────────────────────────
 // Traitement des données
 // ─────────────────────────────────────────────────────────────
-function process({equipes, fixtures, points, stats, joueurs}) {
+function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs}) {
   const done = fixtures.filter(f=>['FT','AET','PEN'].includes(f.status));
-  const totalGoals = done.reduce((s,f)=>s+(f.home_goals||0)+(f.away_goals||0),0);
-  const totalPts   = rnd(points.reduce((s,p)=>s+p.points,0));
-  const totalCS    = stats.filter(s=>s.clean_sheet).length;
+  const totalGoals  = done.reduce((s,f)=>s+(f.home_goals||0)+(f.away_goals||0),0);
+  const totalPts    = rnd(points.reduce((s,p)=>s+p.points,0));
+  const totalPasses = stats.reduce((s,x)=>s+(x.passes||0),0);
+  const totalArrets = stats.reduce((s,x)=>s+(x.arrets||0),0);
+  // Nombre de matchs où au moins un joueur a eu un clean sheet
+  const csFixtures = new Set();
+  stats.forEach(s=>{ if(s.clean_sheet) csFixtures.add(s.fixture_id); });
+  const totalCS = csFixtures.size;
 
   // Points par equipe
   const ptsEq = {};
@@ -192,9 +198,29 @@ function process({equipes, fixtures, points, stats, joueurs}) {
   // Meilleure équipe théorique
   const bestTeam = computeBestTeam(joueurs, ptsJ);
 
-  return {equipes, joueurs, fixtures:done, ranking, ptsJ,
-    totalGoals, totalPts, totalCS, matchCount:done.length,
-    topPerf, topScore, topCS2, bestF, bestFPts, bestTeam};
+  // Joueurs de l'équipe championne
+  const winner = ranking[0] || null;
+  let winnerPlayers = [];
+  if(winner) {
+    const wIds = new Set((equipeJoueurs||[]).filter(ej=>ej.equipe_id===winner.id).map(ej=>ej.joueur_id));
+    winnerPlayers = joueurs.filter(j=>wIds.has(j.id)).map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0)}));
+  }
+
+  // Points par fixture × equipe (pour le race chart)
+  const ptsGrid = {};
+  points.forEach(p => {
+    if(!ptsGrid[p.fixture_id]) ptsGrid[p.fixture_id] = {};
+    ptsGrid[p.fixture_id][p.equipe_id] = (ptsGrid[p.fixture_id][p.equipe_id]||0)+p.points;
+  });
+
+  const matchCount = done.length;
+  const avgPtsMatch = matchCount > 0 ? rnd(totalPts / matchCount) : 0;
+
+  return {equipes, joueurs, fixtures:done, ranking, ptsJ, ptsGrid,
+    totalGoals, totalPts, totalPasses, totalArrets, totalCS,
+    matchCount, avgPtsMatch,
+    topPerf, topScore, topCS2, bestF, bestFPts, bestTeam,
+    winner, winnerPlayers};
 }
 
 function computeBestTeam(joueurs, ptsJ) {
@@ -247,11 +273,6 @@ function sMerci(d) {
         <div class="t-serif rv" data-d=".95" style="font-size:clamp(.9rem,2.5vw,1.5rem);color:rgba(238,242,255,.42)">
           Merci d'avoir vécu cette aventure ensemble
         </div>
-        <div class="rv" data-d="1.2" style="display:flex;gap:clamp(16px,3.5vw,36px);flex-wrap:wrap;justify-content:center;margin-top:8px">
-          <span class="pill">🏟️ ${d.matchCount} matchs suivis</span>
-          <span class="pill">👥 ${d.joueurs.length} joueurs</span>
-          <span class="pill">🌍 CDM 2026</span>
-        </div>
       </div>`,
     onEnter(el){
       reveal(el,100);
@@ -262,20 +283,22 @@ function sMerci(d) {
 
 function sChiffres(d) {
   const cards=[
-    {icon:'🏟️',id:'cnt-m',val:d.matchCount, label:'Matchs suivis',  col:GOLD},
-    {icon:'⚽', id:'cnt-g',val:d.totalGoals, label:'Buts au total',  col:'#58c4dc'},
-    {icon:'⭐', id:'cnt-p',val:d.totalPts,   label:'Points générés', col:GOLD,   deci:1},
-    {icon:'🧤', id:'cnt-c',val:d.totalCS,    label:'Clean sheets',   col:'#a0e6a0'},
+    {icon:'⚽', id:'cnt-g', val:d.totalGoals,   label:'Buts au total',       col:'#58c4dc'},
+    {icon:'🎯', id:'cnt-a', val:d.totalPasses,   label:'Passes décisives',    col:'#a0e6a0'},
+    {icon:'🧤', id:'cnt-r', val:d.totalArrets,   label:'Arrêts (gardiens)',   col:'#d8a2e8'},
+    {icon:'🔒', id:'cnt-c', val:d.totalCS,       label:'Matchs clean sheet',  col:'#82c9f5'},
+    {icon:'⭐', id:'cnt-p', val:d.totalPts,      label:'Points générés',      col:GOLD, deci:1},
+    {icon:'📊', id:'cnt-m', val:d.avgPtsMatch,   label:'Moy. pts / match',    col:'#ff9e4a', deci:1},
   ];
   return {
     html:`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(14px,3vw,28px);width:100%">
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(12px,2.5vw,24px);width:100%">
         <div class="t-eyebrow rv" data-d="0">La compétition en chiffres</div>
-        <div class="stats-grid rv" data-d=".25">
+        <div class="rv" data-d=".2" style="display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(8px,2vw,20px);max-width:860px;width:100%">
           ${cards.map(c=>`
             <div class="stat-card">
-              <div style="font-size:clamp(1.4rem,3.5vw,2.2rem)">${c.icon}</div>
-              <div class="sv" style="color:${c.col}"><span id="${c.id}">0</span></div>
+              <div style="font-size:clamp(1.2rem,3vw,1.9rem)">${c.icon}</div>
+              <div class="sv" style="color:${c.col};font-size:clamp(2rem,5.5vw,4rem)"><span id="${c.id}">0</span></div>
               <div class="sl">${c.label}</div>
             </div>`).join('')}
         </div>
@@ -388,20 +411,18 @@ function sBestMatch(d) {
   };
 }
 
-function sFormation(d) {
-  const {players,spent}=d.bestTeam;
-  if(!players.length) return null;
+function makePins(players) {
   const byPos={GAR:[],DEF:[],MIL:[],ATT:[]};
   players.forEach(p=>{ if(byPos[p.poste]) byPos[p.poste].push(p); });
-
-  let pins='';
+  let html='';
   for(const [pos,slots] of Object.entries(PITCH_POS)){
     const pp=byPos[pos]||[];
     slots.forEach((slot,i)=>{
       const p=pp[i]; if(!p) return;
       const ini=p.nom.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
-      pins+=`
-        <div class="ppin rv" data-d="${.3+i*.04}" style="left:${slot.x}%;top:${slot.y}%">
+      // Inline transitions — avoid .rv which conflicts with absolute positioning transform
+      html+=`
+        <div class="ppin" style="left:${slot.x}%;top:${slot.y}%;opacity:0;transition:opacity .5s ease ${.3+i*.05}s,transform .5s ease ${.3+i*.05}s;transform:translate(-50%,-50%) scale(.6)">
           ${p.photo
             ?`<img class="ppin-photo" src="${esc(p.photo)}" alt="${esc(ini)}" onerror="this.outerHTML='<div class=ppin-photo>${ini}</div>'">`
             :`<div class="ppin-photo">${ini}</div>`}
@@ -410,22 +431,63 @@ function sFormation(d) {
         </div>`;
     });
   }
+  return html;
+}
+
+function revealPins(el) {
+  el.querySelectorAll('.ppin').forEach(p=>{
+    p.style.opacity='1';
+    p.style.transform='translate(-50%,-50%)';
+  });
+}
+
+function pitchInner(pins) {
+  return `<div class="p-mid"></div><div class="p-circ"></div><div class="p-dot"></div>
+    <div class="p-box-t"></div><div class="p-box-b"></div>${pins}`;
+}
+
+function sCompare(d) {
+  if(!d.winner) return null;
+  const {players,spent}=d.bestTeam;
+  if(!players.length) return null;
+
+  const wPins = makePins(d.winnerPlayers);
+  const bPins = makePins(players);
+
+  // Pitch partagé inline: height-constrained, width auto via aspect-ratio
+  const pitchStyle='height:100%;width:auto;max-width:100%;aspect-ratio:70/108;background:repeating-linear-gradient(180deg,#1d4d1d 0,#1d4d1d 26px,#214e21 26px,#214e21 52px);border:2px solid rgba(255,255,255,.45);border-radius:4px;position:relative';
+  const wrapStyle='flex:1;min-height:0;width:100%;display:flex;align-items:center;justify-content:center;overflow:hidden';
+
   return {
     html:`
-      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.8vw,18px);width:100%">
-        <div class="t-eyebrow rv" data-d="0">🏆 Meilleure équipe théorique du tournoi</div>
-        <div style="font-size:clamp(.55rem,1.1vw,.68rem);letter-spacing:.1em;text-transform:uppercase;color:rgba(238,242,255,.2)" class="rv" data-d=".15">
-          Budget ${110}M · ${spent}M dépensés · 2 GAR — 5 DEF — 5 MIL — 3 ATT
-        </div>
-        <div class="pitch-outer rv" data-d=".35">
-          <div class="pitch">
-            <div class="p-mid"></div><div class="p-circ"></div><div class="p-dot"></div>
-            <div class="p-box-t"></div><div class="p-box-b"></div>
-            ${pins}
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.2vw,12px);width:100%;height:100%">
+        <div class="t-eyebrow rv" data-d="0">🏆 Équipe championne vs Meilleure équipe théorique</div>
+        <div style="display:flex;gap:clamp(10px,2vw,24px);width:100%;flex:1;min-height:0">
+
+          <div class="rv" data-d=".15" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%">
+            <div class="t-lg g-gold" style="font-size:clamp(.9rem,2.2vw,1.8rem);text-transform:none;letter-spacing:.01em;text-align:center">${esc(d.winner.nom)}</div>
+            <div style="font-size:clamp(.5rem,1vw,.62rem);letter-spacing:.13em;text-transform:uppercase;color:rgba(238,242,255,.22)">Équipe du tournoi · ${d.winner.total} pts</div>
+            <div style="${wrapStyle}" id="w-wrap">
+              <div style="${pitchStyle}" id="w-pitch">${pitchInner(wPins)}</div>
+            </div>
           </div>
+
+          <div class="rv" data-d=".05" style="align-self:center;color:rgba(238,242,255,.15);font-weight:900;font-size:clamp(.8rem,2vw,1.6rem);flex-shrink:0">VS</div>
+
+          <div class="rv" data-d=".25" style="flex:1;min-width:0;display:flex;flex-direction:column;align-items:center;gap:5px;height:100%">
+            <div class="t-lg c-gold" style="font-size:clamp(.9rem,2.2vw,1.8rem);text-transform:none;letter-spacing:.01em;text-align:center">Meilleure équipe</div>
+            <div style="font-size:clamp(.5rem,1vw,.62rem);letter-spacing:.13em;text-transform:uppercase;color:rgba(238,242,255,.22)">Budget 110M · ${spent}M utilisés</div>
+            <div style="${wrapStyle}" id="b-wrap">
+              <div style="${pitchStyle}" id="b-pitch">${pitchInner(bPins)}</div>
+            </div>
+          </div>
+
         </div>
       </div>`,
-    onEnter(el){ reveal(el,80); }
+    onEnter(el){
+      reveal(el, 80);
+      setTimeout(()=>revealPins(el), 500);
+    }
   };
 }
 
@@ -476,6 +538,217 @@ function sPodium(rank, d) {
   };
 }
 
+function sRaceChart(d) {
+  if(!d.ranking || d.ranking.length < 2) return null;
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(6px,1.4vw,14px);width:100%;height:100%">
+        <div class="t-eyebrow rv" data-d="0">📈 Évolution du classement</div>
+        <canvas id="race-cvs" style="width:100%;flex:1;min-height:0;display:block"></canvas>
+      </div>`,
+    onEnter(el) {
+      reveal(el, 80);
+      setTimeout(() => drawRaceChart(el.querySelector('#race-cvs'), d), 250);
+    }
+  };
+}
+
+function drawRaceChart(canvas, d) {
+  if(!canvas || !d.ranking.length) return;
+  const dpr = window.devicePixelRatio || 1;
+  const rect = canvas.getBoundingClientRect();
+  if(!rect.width || !rect.height) return;
+
+  canvas.width  = Math.round(rect.width  * dpr);
+  canvas.height = Math.round(rect.height * dpr);
+  const ctx = canvas.getContext('2d');
+  ctx.scale(dpr, dpr);
+  const W = rect.width, H = rect.height;
+
+  // Fixtures triés chronologiquement
+  const sortedFix = [...d.fixtures].sort((a,b) => new Date(a.date_heure)-new Date(b.date_heure));
+  if(!sortedFix.length) return;
+  const N = sortedFix.length;
+  const equipes = d.ranking;
+
+  // Séries cumulatives : pts[0]=0, pts[i]=cumul après match i
+  const series = equipes.map(eq => {
+    let cum = 0;
+    const pts = [0, ...sortedFix.map(f => { cum += (d.ptsGrid[f.id]?.[eq.id]||0); return cum; })];
+    return { eq, pts };
+  });
+  const maxPts = Math.max(...series.map(s => Math.max(...s.pts)), 1);
+
+  const PAD = { top:18, right:Math.min(155, Math.round(W*0.21)), bottom:40, left:40 };
+  const CW = W - PAD.left - PAD.right;
+  const CH = H - PAD.top  - PAD.bottom;
+  const xOf = i => (i / N) * CW;
+  const yOf = v => CH - (v / maxPts) * CH;
+
+  // Regrouper les rounds consécutifs de même nom abrégé
+  function shortRound(r) {
+    if(!r) return '';
+    if(r.startsWith('Group Stage')) return 'Groupes';
+    if(r === 'Round of 32')    return 'R32';
+    if(r === 'Round of 16')    return '1/8';
+    if(r === 'Quarter-finals') return 'QF';
+    if(r === 'Semi-finals')    return 'SF';
+    if(r === '3rd Place Final')return 'P3';
+    if(r === 'Final')          return 'F';
+    return r.slice(0,8);
+  }
+  const roundGroups = [];
+  let prevShort = null;
+  sortedFix.forEach((f, i) => {
+    const s = shortRound(f.round);
+    if(s !== prevShort) { roundGroups.push({short:s, start:i, end:i}); prevShort=s; }
+    else roundGroups[roundGroups.length-1].end = i;
+  });
+
+  const PALETTE = [
+    '#f5c842','#58c4dc','#a0e6a0','#ff9e4a','#d8a2e8',
+    '#ff7878','#82c9f5','#d4e88c','#f0b5d0','#98d8b8',
+    '#ffd3a0','#b0c4f0','#f0d880','#c0e0c0','#e8b8d8',
+  ];
+
+  const DURATION = 3200;
+  let startTime = null, rafId = null;
+
+  function draw(now) {
+    if(!startTime) startTime = now;
+    const p = Math.min((now - startTime) / DURATION, 1);
+    const ease = 1 - Math.pow(1 - p, 2.8);
+    const clipX = ease * CW;
+
+    ctx.clearRect(0, 0, W, H);
+
+    // Grille horizontale
+    for(let g = 0; g <= 4; g++) {
+      const vy = g / 4;
+      const py = PAD.top + CH * vy;
+      ctx.strokeStyle = 'rgba(238,242,255,0.055)';
+      ctx.lineWidth = 1; ctx.setLineDash([]);
+      ctx.beginPath(); ctx.moveTo(PAD.left, py); ctx.lineTo(PAD.left + CW, py); ctx.stroke();
+      ctx.fillStyle = 'rgba(238,242,255,0.2)';
+      ctx.font = `${Math.round(Math.max(9, Math.min(11, W/90)))}px system-ui`;
+      ctx.textAlign = 'right';
+      ctx.fillText(Math.round((1-vy)*maxPts), PAD.left-6, py+4);
+    }
+
+    // Séparateurs + labels de rounds
+    const drawnShorts = new Set();
+    roundGroups.forEach(({short, start, end}) => {
+      const midI  = (start + end) / 2 + 0.5; // +0.5 pour être dans la plage [start+1..end+1]
+      const midX  = xOf(midI);
+      const divX  = xOf(end + 1);
+      const label = short;
+
+      if(!drawnShorts.has(label) && midX <= clipX) {
+        drawnShorts.add(label);
+        ctx.fillStyle = 'rgba(238,242,255,0.2)';
+        ctx.font = `${Math.round(Math.max(8, Math.min(10, W/100)))}px system-ui`;
+        ctx.textAlign = 'center';
+        ctx.fillText(label, PAD.left + midX, PAD.top + CH + 24);
+      }
+      if(end < N-1 && divX <= clipX) {
+        ctx.strokeStyle = 'rgba(238,242,255,0.08)';
+        ctx.lineWidth = 1; ctx.setLineDash([3,3]);
+        ctx.beginPath();
+        ctx.moveTo(PAD.left + divX, PAD.top);
+        ctx.lineTo(PAD.left + divX, PAD.top + CH);
+        ctx.stroke(); ctx.setLineDash([]);
+      }
+    });
+
+    // Lignes (clippées)
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(PAD.left - 1, PAD.top - 6, clipX + 2, CH + 12);
+    ctx.clip();
+    series.forEach((s, si) => {
+      const col = PALETTE[si % PALETTE.length];
+      ctx.strokeStyle = col;
+      ctx.lineWidth = si === 0 ? 3 : 1.8;
+      ctx.globalAlpha = si === 0 ? 1 : 0.65;
+      ctx.lineJoin = 'round'; ctx.lineCap = 'round';
+      ctx.beginPath();
+      s.pts.forEach((v, i) => {
+        const px = PAD.left + xOf(i), py = PAD.top + yOf(v);
+        i === 0 ? ctx.moveTo(px,py) : ctx.lineTo(px,py);
+      });
+      ctx.stroke(); ctx.globalAlpha = 1;
+    });
+    ctx.restore();
+
+    // Points live en bout de ligne
+    series.forEach((s, si) => {
+      const col = PALETTE[si % PALETTE.length];
+      let dotY = PAD.top + yOf(s.pts[0]);
+      for(let i = 1; i <= N; i++) {
+        const x0 = xOf(i-1), x1 = xOf(i);
+        if(clipX <= x1 || i === N) {
+          const t = x1 > x0 ? Math.min((clipX - x0) / (x1 - x0), 1) : 1;
+          const v = s.pts[i-1] + t * (s.pts[i] - s.pts[i-1]);
+          dotY = PAD.top + yOf(Math.max(0, v));
+          break;
+        }
+      }
+      ctx.fillStyle = col;
+      ctx.globalAlpha = si === 0 ? 1 : 0.75;
+      ctx.beginPath(); ctx.arc(PAD.left + Math.min(clipX, CW), dotY, si===0?5:3.5, 0, Math.PI*2); ctx.fill();
+      ctx.globalAlpha = 1;
+    });
+
+    // Labels finaux une fois l'animation terminée
+    if(p >= 1) {
+      const labelH = Math.max(12, Math.min(15, H/26));
+      const sortedForLabel = [...series].map((s,i) => ({
+        s, i, final: s.pts[N], col: PALETTE[i % PALETTE.length]
+      })).sort((a,b) => b.final - a.final);
+
+      const usedY = [];
+      sortedForLabel.forEach(({s, i, final, col}) => {
+        const rawY = PAD.top + yOf(final);
+        let ly = rawY;
+        for(const uy of usedY) {
+          if(Math.abs(ly - uy) < labelH + 3) ly = uy + labelH + 3;
+        }
+        usedY.push(ly);
+        const lx = PAD.left + CW + 9;
+
+        // Dot final
+        ctx.fillStyle = col;
+        ctx.globalAlpha = i===0?1:0.75;
+        ctx.beginPath(); ctx.arc(PAD.left+CW, rawY, i===0?5:3.5, 0, Math.PI*2); ctx.fill();
+        ctx.globalAlpha = 1;
+
+        // Connecteur
+        if(Math.abs(ly - rawY) > 7) {
+          ctx.strokeStyle = col; ctx.globalAlpha = 0.3; ctx.lineWidth = 1;
+          ctx.beginPath(); ctx.moveTo(PAD.left+CW+5, rawY); ctx.lineTo(lx+1, ly+2); ctx.stroke();
+          ctx.globalAlpha = 1;
+        }
+
+        // Nom
+        const fs = Math.round(Math.max(9, Math.min(12, W/84)));
+        ctx.font = `bold ${fs}px system-ui`; ctx.textAlign = 'left';
+        ctx.fillStyle = col;
+        const name = s.eq.nom.length > 13 ? s.eq.nom.slice(0,11)+'…' : s.eq.nom;
+        ctx.fillText(name, lx, ly + 3);
+
+        // Points
+        ctx.font = `${Math.round(Math.max(8, Math.min(10, W/100)))}px system-ui`;
+        ctx.fillStyle = 'rgba(238,242,255,0.32)';
+        ctx.fillText(Math.round(final*10)/10+'pts', lx, ly + 3 + fs + 1);
+      });
+    }
+
+    if(p < 1) rafId = requestAnimationFrame(draw);
+  }
+
+  rafId = requestAnimationFrame(draw);
+}
+
 // ─────────────────────────────────────────────────────────────
 // Moteur de slides
 // ─────────────────────────────────────────────────────────────
@@ -486,13 +759,14 @@ function buildSlides(d) {
     sIntro(d),
     sMerci(d),
     sChiffres(d),
+    sRaceChart(d),
     d.topScore ? sTopScorer(d) : null,
     sTopPerf(d),
     d.bestF ? sBestMatch(d) : null,
-    d.bestTeam.players.length ? sFormation(d) : null,
     d.ranking[2] ? sPodium(3,d) : null,
     d.ranking[1] ? sPodium(2,d) : null,
     d.ranking[0] ? sPodium(1,d) : null,
+    sCompare(d),
   ].filter(Boolean);
 
   const wrap=document.getElementById('slides-wrap');
