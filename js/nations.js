@@ -71,8 +71,8 @@ async function init() {
       fetchAllDb(db.from('config').select('key,value').eq('key','bareme')),
     ]);
 
-    let bareme = null;
-    try { bareme = JSON.parse(configRows[0]?.value || 'null'); } catch {}
+    let bareme = CONFIG.BAREME;
+    try { bareme = JSON.parse(configRows[0]?.value || 'null') || CONFIG.BAREME; } catch {}
 
     const ptsJ = computePtsFromStats(stats, joueurs, bareme);
 
