@@ -255,9 +255,10 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   // Équipes par poste (pour mentions honorables — classement des ÉQUIPES FANTASY)
   const equipesByPos = {};
   ['ATT','MIL','DEF'].forEach(pos=>{
+    const postes = pos==='DEF' ? ['DEF','GAR'] : [pos];
     equipesByPos[pos]=ranking.map(eq=>{
       const eqIds=new Set((equipeJoueurs||[]).filter(ej=>ej.equipe_id===eq.id).map(ej=>ej.joueur_id));
-      const posTotal=rnd(joueurs.filter(j=>eqIds.has(j.id)&&j.poste===pos).reduce((s,j)=>s+(ptsJ[j.id]||0),0));
+      const posTotal=rnd(joueurs.filter(j=>eqIds.has(j.id)&&postes.includes(j.poste)).reduce((s,j)=>s+(ptsJ[j.id]||0),0));
       return {...eq,posTotal};
     }).filter(e=>e.posTotal>0).sort((a,b)=>b.posTotal-a.posTotal);
   });
@@ -510,7 +511,7 @@ function sMentionPos(poste, d) {
   const CFG={
     ATT:{icon:'⚽',label:'Meilleure attaque',  sub:'Points cumulés des attaquants'},
     MIL:{icon:'🎯',label:'Meilleur milieu',    sub:'Points cumulés des milieux'},
-    DEF:{icon:'🛡️',label:'Meilleure défense',  sub:'Points cumulés des défenseurs'},
+    DEF:{icon:'🛡️',label:'Meilleure défense',  sub:'Points cumulés des défenseurs + gardiens'},
   };
   const cfg=CFG[poste]; if(!cfg) return null;
   const top=(d.equipesByPos[poste]||[]).slice(0,3);
