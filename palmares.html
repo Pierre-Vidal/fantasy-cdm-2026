@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🏆 Palmarès CDM 2026 — C'est quoi ce poulet ?</title>
+  <link rel="stylesheet" href="css/style.css">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { width: 100%; height: 100%; overflow: hidden; background: #060811; color: #eef2ff; font-family: system-ui, -apple-system, sans-serif; }
+
+    /* ── Canvas layers ── */
+    #bg-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; }
+    #fx-canvas { position: fixed; inset: 0; width: 100%; height: 100%; z-index: 100; pointer-events: none; }
+
+    /* ── Loading ── */
+    #loading {
+      position: fixed; inset: 0; z-index: 200;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: #060811; gap: 16px;
+      font-size: 0.9rem; color: rgba(238,242,255,0.4);
+      transition: opacity 0.6s ease;
+    }
+    .spin { width: 34px; height: 34px; border: 3px solid rgba(228,169,60,0.2); border-top-color: #e4a93c; border-radius: 50%; animation: spin .9s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Slides container ── */
+    #slides-wrap { position: fixed; inset: 0; z-index: 1; overflow: hidden; }
+
+    /* ── Individual slide ── */
+    .pslide {
+      position: absolute; inset: 0;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      padding: clamp(24px, 5vw, 72px) clamp(20px, 6vw, 80px);
+      text-align: center;
+      transition: opacity .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1);
+      will-change: transform, opacity;
+      transform: translateX(100%); opacity: 0;
+    }
+    .pslide.active { transform: translateX(0); opacity: 1; }
+
+    /* ── Typography ── */
+    .t-score {
+      font-family: 'Impact','Haettenschweiler','Arial Narrow Bold','Arial Black',sans-serif;
+      font-size: clamp(5rem, 18vw, 14rem);
+      font-weight: 900; line-height: .88;
+      font-variant-numeric: tabular-nums;
+      letter-spacing: -.01em;
+    }
+    .t-xl {
+      font-family: 'Impact','Haettenschweiler','Arial Narrow Bold','Arial Black',sans-serif;
+      font-size: clamp(2.6rem, 7vw, 6.5rem);
+      font-weight: 900; line-height: .95;
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .t-lg {
+      font-family: 'Impact','Haettenschweiler','Arial Narrow Bold','Arial Black',sans-serif;
+      font-size: clamp(1.8rem, 4.5vw, 3.8rem);
+      font-weight: 900; text-transform: uppercase; letter-spacing: .05em;
+    }
+    .t-serif { font-family: Georgia,'Times New Roman',serif; font-style: italic; }
+    .t-eyebrow {
+      font-size: clamp(.6rem, 1.4vw, .8rem);
+      font-weight: 700; letter-spacing: .2em;
+      text-transform: uppercase; color: rgba(238,242,255,.38);
+    }
+
+    /* ── Color utilities ── */
+    .c-gold   { color: #e4a93c; }
+    .c-silver { color: #b2bec9; }
+    .c-bronze { color: #c97b3a; }
+    .c-muted  { color: rgba(238,242,255,.4); }
+    .g-gold   { background: linear-gradient(135deg,#f5c842 0%,#e4a93c 45%,#b8760a 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .g-silver { background: linear-gradient(135deg,#eef2f7 0%,#b2bec9 50%,#788795 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+    .g-bronze { background: linear-gradient(135deg,#e8a070 0%,#c97b3a 50%,#8c5020 100%); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
+
+    /* ── Reveal system ── */
+    .rv { opacity: 0; transform: translateY(28px); transition: opacity .65s ease, transform .65s ease; }
+    .rv.in { opacity: 1; transform: translateY(0); }
+    .rv-scale { opacity: 0; transform: scale(.6); transition: opacity .55s ease, transform .55s cubic-bezier(.34,1.56,.64,1); }
+    .rv-scale.in { opacity: 1; transform: scale(1); }
+
+    /* ── Stat cards grid ── */
+    .stats-grid { display: grid; grid-template-columns: repeat(2,1fr); gap: clamp(10px,2.5vw,28px); max-width: 780px; width: 100%; }
+    .stat-card {
+      background: rgba(238,242,255,.035); border: 1px solid rgba(238,242,255,.07);
+      border-radius: 14px; padding: clamp(14px,3vw,30px);
+      display: flex; flex-direction: column; align-items: center; gap: 5px;
+    }
+    .stat-card .sv {
+      font-family: 'Impact','Arial Black',sans-serif;
+      font-size: clamp(2.6rem,7.5vw,5.5rem);
+      font-variant-numeric: tabular-nums; line-height: 1;
+    }
+    .stat-card .sl { font-size: clamp(.6rem,1.4vw,.8rem); letter-spacing: .12em; text-transform: uppercase; color: rgba(238,242,255,.38); }
+
+    /* ── Player spotlight ── */
+    .player-photo {
+      width: clamp(90px,18vw,150px); height: clamp(90px,18vw,150px);
+      border-radius: 50%; overflow: hidden; flex-shrink: 0;
+      border: 3px solid rgba(228,169,60,.55);
+      box-shadow: 0 0 40px rgba(228,169,60,.22);
+      background: rgba(238,242,255,.06);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 2rem;
+    }
+    .player-photo img { width: 100%; height: 100%; object-fit: cover; }
+    .pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: rgba(238,242,255,.06); border: 1px solid rgba(238,242,255,.09);
+      border-radius: 999px; padding: 4px 14px;
+      font-size: clamp(.65rem,1.4vw,.82rem); color: rgba(238,242,255,.55);
+    }
+
+    /* ── Football pitch ── */
+    .pitch-outer { max-width: min(660px, 86vw); width: 100%; }
+    .pitch {
+      width: 100%; aspect-ratio: 70 / 108;
+      background: repeating-linear-gradient(180deg, #1d4d1d 0px, #1d4d1d 26px, #214e21 26px, #214e21 52px);
+      border: 2px solid rgba(255,255,255,.45); border-radius: 4px;
+      position: relative;
+    }
+    .p-mid  { position: absolute; top: 50%; left: 0; right: 0; height: 2px; background: rgba(255,255,255,.42); transform: translateY(-50%); }
+    .p-circ { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 17%; aspect-ratio: 1; border: 2px solid rgba(255,255,255,.42); border-radius: 50%; }
+    .p-dot  { position: absolute; top: 50%; left: 50%; transform: translate(-50%,-50%); width: 3px; height: 3px; background: rgba(255,255,255,.6); border-radius: 50%; }
+    .p-box-t { position: absolute; top: 0; left: 16%; right: 16%; height: 16%; border: 2px solid rgba(255,255,255,.42); border-top: none; }
+    .p-box-b { position: absolute; bottom: 0; left: 16%; right: 16%; height: 16%; border: 2px solid rgba(255,255,255,.42); border-bottom: none; }
+
+    .ppin {
+      position: absolute; transform: translate(-50%, -50%);
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+    }
+    .ppin-photo {
+      width: clamp(28px,5vw,42px); height: clamp(28px,5vw,42px);
+      border-radius: 50%; border: 2px solid rgba(228,169,60,.75);
+      object-fit: cover; background: #1d4d1d;
+      display: flex; align-items: center; justify-content: center;
+      font-size: clamp(.5rem,.85vw,.7rem); font-weight: 700; color: #e4a93c;
+    }
+    .ppin-name {
+      font-size: clamp(.42rem,.85vw,.6rem); font-weight: 700;
+      background: rgba(0,0,0,.72); color: #fff;
+      border-radius: 3px; padding: 1px 4px; white-space: nowrap;
+      max-width: clamp(44px,7.5vw,66px); overflow: hidden; text-overflow: ellipsis;
+    }
+    .ppin-pts { font-size: clamp(.38rem,.72vw,.52rem); color: #e4a93c; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+    /* ── Match reveal card ── */
+    .match-card {
+      background: rgba(238,242,255,.04); border: 1px solid rgba(238,242,255,.09);
+      border-radius: 18px; padding: clamp(18px,3.5vw,40px) clamp(24px,5vw,64px);
+    }
+    .match-score-big {
+      font-family: 'Impact','Arial Black',sans-serif;
+      font-size: clamp(3.5rem,11vw,9rem);
+      font-variant-numeric: tabular-nums; letter-spacing: .05em;
+    }
+
+    /* ── Podium medal ── */
+    .podium-medal { font-size: clamp(4.5rem,14vw,9rem); display: block; }
+    .podium-name {
+      font-family: 'Impact','Arial Black',sans-serif;
+      font-size: clamp(2.2rem,7vw,6.5rem);
+      font-weight: 900; line-height: .9;
+      text-wrap: balance; letter-spacing: .01em;
+    }
+    .podium-pts {
+      font-family: 'Impact','Arial Black',sans-serif;
+      font-size: clamp(1.4rem,3.5vw,2.8rem);
+      font-variant-numeric: tabular-nums; letter-spacing: .04em;
+    }
+
+    /* ── Champion glow ── */
+    @keyframes goldPulse {
+      0%,100% { text-shadow: 0 0 30px rgba(228,169,60,.5), 0 0 70px rgba(228,169,60,.2); }
+      50%      { text-shadow: 0 0 70px rgba(228,169,60,.9), 0 0 140px rgba(228,169,60,.4); }
+    }
+    .champion-glow { animation: goldPulse 2s ease-in-out infinite; }
+
+    @keyframes medalDrop {
+      0%   { transform: scale(0) rotate(-160deg); opacity: 0; }
+      65%  { transform: scale(1.18) rotate(8deg); opacity: 1; }
+      82%  { transform: scale(.94) rotate(-3deg); }
+      100% { transform: scale(1) rotate(0deg); }
+    }
+    .medal-drop { animation: medalDrop .85s cubic-bezier(.34,1.56,.64,1) forwards; }
+
+    @keyframes chickenBob {
+      0%,100% { transform: translateY(0) rotate(-4deg); }
+      50%      { transform: translateY(-14px) rotate(4deg); }
+    }
+    .chicken-bob { animation: chickenBob 2.8s ease-in-out infinite; }
+
+    /* ── Separating line ── */
+    .divider { width: 60px; height: 2px; background: linear-gradient(90deg,transparent,#e4a93c,transparent); margin: 0 auto; }
+
+    /* ── Navigation ── */
+    #nav-wrap {
+      position: fixed; bottom: 28px; left: 0; right: 0; z-index: 50;
+      display: flex; align-items: center; justify-content: center; gap: 20px;
+    }
+    .nav-btn {
+      width: 40px; height: 40px; border-radius: 50%;
+      background: rgba(238,242,255,.07); border: 1px solid rgba(238,242,255,.13);
+      color: rgba(238,242,255,.6); font-size: 1.25rem; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      transition: all .2s ease;
+    }
+    .nav-btn:hover { background: rgba(228,169,60,.18); border-color: rgba(228,169,60,.45); color: #e4a93c; }
+    #dots { display: flex; gap: 6px; align-items: center; }
+    .dot { width: 6px; height: 6px; border-radius: 3px; background: rgba(238,242,255,.18); transition: all .3s ease; cursor: pointer; }
+    .dot.active { width: 22px; background: #e4a93c; }
+    #slide-counter { position: fixed; top: 18px; right: 22px; z-index: 50; font-size: .68rem; letter-spacing: .14em; color: rgba(238,242,255,.22); font-variant-numeric: tabular-nums; }
+
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  </style>
+</head>
+<body>
+<canvas id="bg-canvas"></canvas>
+<canvas id="fx-canvas"></canvas>
+
+<div id="loading">
+  <div class="spin"></div>
+  <span>Chargement du palmarès…</span>
+</div>
+
+<div id="slides-wrap"></div>
+
+<div id="nav-wrap">
+  <button class="nav-btn" onclick="prevSlide()">‹</button>
+  <div id="dots"></div>
+  <button class="nav-btn" onclick="nextSlide()">›</button>
+</div>
+<div id="slide-counter"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+<script src="js/config.js"></script>
+<script src="js/app.js"></script>
+<script src="js/palmares.js"></script>
+</body>
+</html>
