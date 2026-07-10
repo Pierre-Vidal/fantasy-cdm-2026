@@ -365,16 +365,18 @@ function resetBones(){
 
 function animIdle(t){
   B.HEAD.rot       ={x:0,y:Math.sin(t*0.7)*0.12,z:Math.sin(t*0.4)*0.03};
-  B.L_UPPER_ARM.rot={x:Math.sin(t*0.9)*0.07,y:0,z:0.05+Math.sin(t*0.6)*0.04};
-  B.R_UPPER_ARM.rot={x:Math.sin(t*0.9+1)*0.07,y:0,z:-0.05-Math.sin(t*0.6)*0.04};
+  // z négatif = bras gauche s'écarte du corps; z positif = bras droit s'écarte
+  B.L_UPPER_ARM.rot={x:Math.sin(t*0.9)*0.07,y:0,z:-0.08-Math.sin(t*0.6)*0.03};
+  B.R_UPPER_ARM.rot={x:Math.sin(t*0.9+1)*0.07,y:0,z:0.08+Math.sin(t*0.6)*0.03};
   B.HIPS.rot       ={x:0,y:0,z:Math.sin(t*0.5)*0.012};
 }
 function animWalk(t){
   var s=Math.sin(t*3.5);
   B.L_UPPER_LEG.rot={x:-s*0.52,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.52,y:0,z:0};
   B.L_LOWER_LEG.rot={x:Math.max(0,s)*0.55,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*0.55,y:0,z:0};
-  B.L_UPPER_ARM.rot={x:s*0.38,y:0,z:0.05};B.R_UPPER_ARM.rot={x:-s*0.38,y:0,z:-0.05};
-  B.L_LOWER_ARM.rot={x:Math.max(0,s)*0.3,y:0,z:0};B.R_LOWER_ARM.rot={x:Math.max(0,-s)*0.3,y:0,z:0};
+  B.L_UPPER_ARM.rot={x:s*0.38,y:0,z:-0.08};B.R_UPPER_ARM.rot={x:-s*0.38,y:0,z:0.08};
+  // x négatif = avant-bras se plie vers l'avant (coude en arrière)
+  B.L_LOWER_ARM.rot={x:-Math.max(0,s)*0.35,y:0,z:0};B.R_LOWER_ARM.rot={x:-Math.max(0,-s)*0.35,y:0,z:0};
   B.HEAD.rot={x:Math.abs(s)*0.04,y:0,z:0};B.HIPS.rot={x:0,y:0,z:s*0.025};
 }
 function animRun(t){
@@ -382,8 +384,9 @@ function animRun(t){
   var s=Math.sin(t*5.5);
   B.L_UPPER_LEG.rot={x:-s*0.85,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.85,y:0,z:0};
   B.L_LOWER_LEG.rot={x:Math.max(0,s)*1.0,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*1.0,y:0,z:0};
-  B.L_UPPER_ARM.rot={x:s*0.65,y:0,z:0.06};B.R_UPPER_ARM.rot={x:-s*0.65,y:0,z:-0.06};
-  B.L_LOWER_ARM.rot={x:0.4+Math.max(0,s)*0.4,y:0,z:0};B.R_LOWER_ARM.rot={x:0.4+Math.max(0,-s)*0.4,y:0,z:0};
+  B.L_UPPER_ARM.rot={x:s*0.65,y:0,z:-0.1};B.R_UPPER_ARM.rot={x:-s*0.65,y:0,z:0.1};
+  // avant-bras toujours légèrement fléchi vers l'avant, plus quand le bras recule
+  B.L_LOWER_ARM.rot={x:-0.2-Math.max(0,s)*0.5,y:0,z:0};B.R_LOWER_ARM.rot={x:-0.2-Math.max(0,-s)*0.5,y:0,z:0};
   B.SPINE.rot={x:0.12,y:0,z:s*0.04};B.HEAD.rot={x:-0.1+Math.abs(s)*0.06,y:0,z:0};
 }
 function animGoal(t){
@@ -489,7 +492,7 @@ for(var _ai=0;_ai<animBtns.length;_ai++){
 // ================================================
 var MIXAMO_MAP={
   mixamorigHips:'HIPS',         Hips:'HIPS',
-  mixamorigSpine:'HIPS',        Spine:'HIPS',
+  mixamorigSpine:'SPINE',       Spine:'SPINE',   // Spine → SPINE (pas HIPS)
   mixamorigSpine1:'SPINE',      Spine1:'SPINE',
   mixamorigSpine2:'SPINE',      Spine2:'SPINE',
   mixamorigHead:'HEAD',         Head:'HEAD',
@@ -581,6 +584,35 @@ function parseFBXAnim(obj){
     }
     frames.push(frame);
   }
+
+  // Normalisation delta T-pose : Mixamo embarque souvent une correction de coordonnées
+  // dans la pose de repos (ex. -90° X sur Hips). On soustrait le frame 0 de tous les frames
+  // pour ne garder que le mouvement delta par rapport à la T-pose.
+  if(frames.length>1){
+    var rest={};
+    var rkeys=Object.keys(frames[0]);
+    for(var ri=0;ri<rkeys.length;ri++){
+      var rid=rkeys[ri];
+      var r0=frames[0][rid];
+      rest[rid]=new THREE.Quaternion()
+        .setFromEuler(new THREE.Euler(r0.x,r0.y,r0.z,'XYZ'))
+        .invert();
+    }
+    for(var fn=0;fn<frames.length;fn++){
+      var fkeys=Object.keys(frames[fn]);
+      for(var fki=0;fki<fkeys.length;fki++){
+        var fid=fkeys[fki];
+        if(!rest[fid])continue;
+        var fr=frames[fn][fid];
+        var qC=new THREE.Quaternion().setFromEuler(new THREE.Euler(fr.x,fr.y,fr.z,'XYZ'));
+        // delta = q0^-1 * qFrame → rotation depuis la T-pose
+        var qD=rest[fid].clone().multiply(qC);
+        var ed=new THREE.Euler().setFromQuaternion(qD,'XYZ');
+        frames[fn][fid]={x:ed.x,y:ed.y,z:ed.z};
+      }
+    }
+  }
+
   return{name:clip.name,fps:FPS,frameCount:frameCount,duration:clip.duration,frames:frames};
 }
 
