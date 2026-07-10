@@ -43,7 +43,7 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
 </style>
 </head>
 <body>
-<header>&#x2B1B; Character Editor &mdash; 11 bones + FBX Mixamo import</header>
+<header>&#x2B1B; Character Editor &mdash; 14 bones + FBX Mixamo import</header>
 <div class="editor">
   <div class="left">
     <canvas id="c"></canvas>
@@ -147,25 +147,28 @@ function shadeHex(hex,f){
 var LIGHT=norm3({x:0.55,y:0.85,z:0.72});
 
 // ================================================
-// SKELETON — 11 bones
-// Y: feet y=-6, hips y=6, shoulders y=18, head top y=26
+// SKELETON — 14 bones
+// Y: feet y=-6, hips pivot y=6, shoulder pivot y=18, neck pivot y=21, head top y=29
 // ================================================
 function mkBone(id,bx,by,bz,bw,bh,bd,px,py,pz,parent){
   return{id:id,box:{x:bx,y:by,z:bz,w:bw,h:bh,d:bd},
          pivot:{x:px,y:py,z:pz},parent:parent,rot:{x:0,y:0,z:0}};
 }
 var BONES={
-  HIPS:        mkBone('HIPS',         0,  9, 0, 7,6,4,  0, 6,0, null),
-  SPINE:       mkBone('SPINE',        0, 15, 0, 8,6,4,  0,12,0, 'HIPS'),
-  HEAD:        mkBone('HEAD',         0, 22, 0, 8,8,8,  0,18,0, 'SPINE'),
-  L_UPPER_ARM: mkBone('L_UPPER_ARM', -6, 15, 0, 4,6,3, -6,18,0, 'SPINE'),
-  L_LOWER_ARM: mkBone('L_LOWER_ARM', -6,  9, 0, 3,6,3, -6,12,0, 'L_UPPER_ARM'),
-  R_UPPER_ARM: mkBone('R_UPPER_ARM',  6, 15, 0, 4,6,3,  6,18,0, 'SPINE'),
-  R_LOWER_ARM: mkBone('R_LOWER_ARM',  6,  9, 0, 3,6,3,  6,12,0, 'R_UPPER_ARM'),
-  L_UPPER_LEG: mkBone('L_UPPER_LEG', -2,  3, 0, 4,6,4, -2, 6,0, 'HIPS'),
-  L_LOWER_LEG: mkBone('L_LOWER_LEG', -2, -3, 0, 4,6,4, -2, 0,0, 'L_UPPER_LEG'),
-  R_UPPER_LEG: mkBone('R_UPPER_LEG',  2,  3, 0, 4,6,4,  2, 6,0, 'HIPS'),
-  R_LOWER_LEG: mkBone('R_LOWER_LEG',  2, -3, 0, 4,6,4,  2, 0,0, 'R_UPPER_LEG'),
+  HIPS:        mkBone('HIPS',          0,  9,   0, 7,6,4,  0, 6,0, null),
+  SPINE:       mkBone('SPINE',         0, 15,   0, 8,6,4,  0,12,0, 'HIPS'),
+  NECK:        mkBone('NECK',          0, 19.5, 0, 4,3,3,  0,18,0, 'SPINE'),
+  HEAD:        mkBone('HEAD',          0, 25,   0, 8,8,8,  0,21,0, 'NECK'),
+  L_SHOULDER:  mkBone('L_SHOULDER',   -4, 18,   0, 4,2,3,  0,18,0, 'SPINE'),
+  L_UPPER_ARM: mkBone('L_UPPER_ARM',  -6, 15,   0, 4,6,3, -6,18,0, 'L_SHOULDER'),
+  L_LOWER_ARM: mkBone('L_LOWER_ARM',  -6,  9,   0, 3,6,3, -6,12,0, 'L_UPPER_ARM'),
+  R_SHOULDER:  mkBone('R_SHOULDER',    4, 18,   0, 4,2,3,  0,18,0, 'SPINE'),
+  R_UPPER_ARM: mkBone('R_UPPER_ARM',   6, 15,   0, 4,6,3,  6,18,0, 'R_SHOULDER'),
+  R_LOWER_ARM: mkBone('R_LOWER_ARM',   6,  9,   0, 3,6,3,  6,12,0, 'R_UPPER_ARM'),
+  L_UPPER_LEG: mkBone('L_UPPER_LEG',  -2,  3,   0, 4,6,4, -2, 6,0, 'HIPS'),
+  L_LOWER_LEG: mkBone('L_LOWER_LEG',  -2, -3,   0, 4,6,4, -2, 0,0, 'L_UPPER_LEG'),
+  R_UPPER_LEG: mkBone('R_UPPER_LEG',   2,  3,   0, 4,6,4,  2, 6,0, 'HIPS'),
+  R_LOWER_LEG: mkBone('R_LOWER_LEG',   2, -3,   0, 4,6,4,  2, 0,0, 'R_UPPER_LEG'),
 };
 
 // Pre-compute ancestor chains [self, parent, grandparent, ...]
@@ -229,8 +232,7 @@ function project(p){
 // BONE COLOR
 // ================================================
 function boneColor(id){
-  if(id==='HEAD')return S.skinColor;
-  if(id==='L_LOWER_ARM'||id==='R_LOWER_ARM')return S.skinColor;
+  if(id==='HEAD'||id==='NECK'||id==='L_LOWER_ARM'||id==='R_LOWER_ARM')return S.skinColor;
   if(id==='L_UPPER_LEG'||id==='R_UPPER_LEG'||
      id==='L_LOWER_LEG'||id==='R_LOWER_LEG')return '#111128';
   return S.jerseyColor;
@@ -364,8 +366,8 @@ function resetBones(){
 }
 
 function animIdle(t){
-  B.HEAD.rot       ={x:0,y:Math.sin(t*0.7)*0.12,z:Math.sin(t*0.4)*0.03};
-  // z négatif = bras gauche s'écarte du corps; z positif = bras droit s'écarte
+  B.NECK.rot       ={x:0,y:Math.sin(t*0.7)*0.09,z:Math.sin(t*0.4)*0.02};
+  B.HEAD.rot       ={x:0,y:Math.sin(t*0.7)*0.04,z:Math.sin(t*0.4)*0.01};
   B.L_UPPER_ARM.rot={x:Math.sin(t*0.9)*0.07,y:0,z:-0.08-Math.sin(t*0.6)*0.03};
   B.R_UPPER_ARM.rot={x:Math.sin(t*0.9+1)*0.07,y:0,z:0.08+Math.sin(t*0.6)*0.03};
   B.HIPS.rot       ={x:0,y:0,z:Math.sin(t*0.5)*0.012};
@@ -374,27 +376,28 @@ function animWalk(t){
   var s=Math.sin(t*3.5);
   B.L_UPPER_LEG.rot={x:-s*0.52,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.52,y:0,z:0};
   B.L_LOWER_LEG.rot={x:Math.max(0,s)*0.55,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*0.55,y:0,z:0};
+  B.L_SHOULDER.rot={x:s*0.05,y:0,z:0};B.R_SHOULDER.rot={x:-s*0.05,y:0,z:0};
   B.L_UPPER_ARM.rot={x:s*0.38,y:0,z:-0.08};B.R_UPPER_ARM.rot={x:-s*0.38,y:0,z:0.08};
-  // x négatif = avant-bras se plie vers l'avant (coude en arrière)
   B.L_LOWER_ARM.rot={x:-Math.max(0,s)*0.35,y:0,z:0};B.R_LOWER_ARM.rot={x:-Math.max(0,-s)*0.35,y:0,z:0};
-  B.HEAD.rot={x:Math.abs(s)*0.04,y:0,z:0};B.HIPS.rot={x:0,y:0,z:s*0.025};
+  B.NECK.rot={x:Math.abs(s)*0.03,y:0,z:0};B.HIPS.rot={x:0,y:0,z:s*0.025};
 }
 function animRun(t){
   S.charYOff=Math.abs(Math.sin(t*5))*0.8;
   var s=Math.sin(t*5.5);
   B.L_UPPER_LEG.rot={x:-s*0.85,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.85,y:0,z:0};
   B.L_LOWER_LEG.rot={x:Math.max(0,s)*1.0,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*1.0,y:0,z:0};
+  B.L_SHOULDER.rot={x:s*0.08,y:0,z:0};B.R_SHOULDER.rot={x:-s*0.08,y:0,z:0};
   B.L_UPPER_ARM.rot={x:s*0.65,y:0,z:-0.1};B.R_UPPER_ARM.rot={x:-s*0.65,y:0,z:0.1};
-  // avant-bras toujours légèrement fléchi vers l'avant, plus quand le bras recule
   B.L_LOWER_ARM.rot={x:-0.2-Math.max(0,s)*0.5,y:0,z:0};B.R_LOWER_ARM.rot={x:-0.2-Math.max(0,-s)*0.5,y:0,z:0};
-  B.SPINE.rot={x:0.12,y:0,z:s*0.04};B.HEAD.rot={x:-0.1+Math.abs(s)*0.06,y:0,z:0};
+  B.SPINE.rot={x:0.12,y:0,z:s*0.04};B.NECK.rot={x:-0.08+Math.abs(s)*0.05,y:0,z:0};
 }
 function animGoal(t){
   S.charYOff=Math.abs(Math.sin(t*3))*3.5;
   var p=Math.sin(t*3);
+  B.L_SHOULDER.rot={x:0,y:0,z:-0.4+p*0.1};B.R_SHOULDER.rot={x:0,y:0,z:0.4-p*0.1};
   B.L_UPPER_ARM.rot={x:0,y:0,z:-2.1+p*0.2};B.R_UPPER_ARM.rot={x:0,y:0,z:2.1-p*0.2};
   B.L_LOWER_ARM.rot={x:-0.2,y:0,z:p*0.15};B.R_LOWER_ARM.rot={x:-0.2,y:0,z:-p*0.15};
-  B.HEAD.rot={x:-0.2,y:Math.sin(t*2)*0.2,z:0};
+  B.NECK.rot={x:-0.1,y:Math.sin(t*2)*0.12,z:0};B.HEAD.rot={x:-0.1,y:Math.sin(t*2)*0.08,z:0};
   B.L_UPPER_LEG.rot={x:Math.sin(t*3)*0.18,y:0,z:0};B.R_UPPER_LEG.rot={x:-Math.sin(t*3)*0.18,y:0,z:0};
   B.SPINE.rot={x:-0.05,y:0,z:p*0.03};
 }
@@ -402,16 +405,19 @@ function animTackle(t){
   B.HIPS.rot={x:0.6,y:0,z:0};
   B.R_UPPER_LEG.rot={x:-1.05,y:0,z:0};B.R_LOWER_LEG.rot={x:0.3,y:0,z:0};
   B.L_UPPER_LEG.rot={x:0.4,y:0,z:0.12};B.L_LOWER_LEG.rot={x:0.5,y:0,z:0};
+  B.L_SHOULDER.rot={x:-0.15,y:0,z:-0.1};B.R_SHOULDER.rot={x:-0.1,y:0,z:0.1};
   B.L_UPPER_ARM.rot={x:-0.6,y:0,z:-0.35};B.L_LOWER_ARM.rot={x:-0.3,y:0,z:0};
   B.R_UPPER_ARM.rot={x:-0.4,y:0,z:0.3};B.R_LOWER_ARM.rot={x:-0.2,y:0,z:0};
-  B.HEAD.rot={x:-0.25+Math.sin(t)*0.03,y:Math.sin(t*0.8)*0.08,z:0};
+  B.NECK.rot={x:-0.15+Math.sin(t)*0.02,y:Math.sin(t*0.8)*0.06,z:0};
 }
 function animDance(t){
   S.charYOff=Math.abs(Math.sin(t*4))*0.5;
   var s=Math.sin(t*4);
+  B.L_SHOULDER.rot={x:s*0.1,y:0,z:-0.3-s*0.2};B.R_SHOULDER.rot={x:-s*0.1,y:0,z:0.3+s*0.2};
   B.L_UPPER_ARM.rot={x:s*0.2,y:0,z:-1.5-s*0.7};B.R_UPPER_ARM.rot={x:-s*0.2,y:0,z:1.5+s*0.7};
   B.L_LOWER_ARM.rot={x:0.2+Math.abs(s)*0.4,y:0,z:0};B.R_LOWER_ARM.rot={x:0.2+Math.abs(s)*0.4,y:0,z:0};
-  B.HEAD.rot={x:0,y:Math.sin(t*2)*0.35,z:Math.sin(t*4)*0.1};
+  B.NECK.rot={x:0,y:Math.sin(t*2)*0.22,z:Math.sin(t*4)*0.07};
+  B.HEAD.rot={x:0,y:Math.sin(t*2)*0.13,z:Math.sin(t*4)*0.03};
   B.L_UPPER_LEG.rot={x:s*0.25,y:0,z:0};B.R_UPPER_LEG.rot={x:-s*0.25,y:0,z:0};
   B.L_LOWER_LEG.rot={x:Math.max(0,s)*0.3,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*0.3,y:0,z:0};
   B.HIPS.rot={x:0,y:0,z:Math.sin(t*2)*0.06};
@@ -491,20 +497,22 @@ for(var _ai=0;_ai<animBtns.length;_ai++){
 // FBX IMPORT — Three.js charge lazily a la demande
 // ================================================
 var MIXAMO_MAP={
-  mixamorigHips:'HIPS',         Hips:'HIPS',
-  mixamorigSpine:'SPINE',       Spine:'SPINE',   // Spine → SPINE (pas HIPS)
-  mixamorigSpine1:'SPINE',      Spine1:'SPINE',
-  mixamorigSpine2:'SPINE',      Spine2:'SPINE',
-  mixamorigHead:'HEAD',         Head:'HEAD',
-  mixamorigNeck:'HEAD',         Neck:'HEAD',
-  mixamorigLeftArm:'L_UPPER_ARM',      LeftArm:'L_UPPER_ARM',
-  mixamorigLeftForeArm:'L_LOWER_ARM',  LeftForeArm:'L_LOWER_ARM',
-  mixamorigRightArm:'R_UPPER_ARM',     RightArm:'R_UPPER_ARM',
-  mixamorigRightForeArm:'R_LOWER_ARM', RightForeArm:'R_LOWER_ARM',
-  mixamorigLeftUpLeg:'L_UPPER_LEG',    LeftUpLeg:'L_UPPER_LEG',
-  mixamorigLeftLeg:'L_LOWER_LEG',      LeftLeg:'L_LOWER_LEG',
-  mixamorigRightUpLeg:'R_UPPER_LEG',   RightUpLeg:'R_UPPER_LEG',
-  mixamorigRightLeg:'R_LOWER_LEG',     RightLeg:'R_LOWER_LEG',
+  mixamorigHips:'HIPS',                    Hips:'HIPS',
+  mixamorigSpine:'SPINE',                  Spine:'SPINE',
+  mixamorigSpine1:'SPINE',                 Spine1:'SPINE',
+  mixamorigSpine2:'SPINE',                 Spine2:'SPINE',
+  mixamorigNeck:'NECK',                    Neck:'NECK',
+  mixamorigHead:'HEAD',                    Head:'HEAD',
+  mixamorigLeftShoulder:'L_SHOULDER',      LeftShoulder:'L_SHOULDER',
+  mixamorigLeftArm:'L_UPPER_ARM',          LeftArm:'L_UPPER_ARM',
+  mixamorigLeftForeArm:'L_LOWER_ARM',      LeftForeArm:'L_LOWER_ARM',
+  mixamorigRightShoulder:'R_SHOULDER',     RightShoulder:'R_SHOULDER',
+  mixamorigRightArm:'R_UPPER_ARM',         RightArm:'R_UPPER_ARM',
+  mixamorigRightForeArm:'R_LOWER_ARM',     RightForeArm:'R_LOWER_ARM',
+  mixamorigLeftUpLeg:'L_UPPER_LEG',        LeftUpLeg:'L_UPPER_LEG',
+  mixamorigLeftLeg:'L_LOWER_LEG',          LeftLeg:'L_LOWER_LEG',
+  mixamorigRightUpLeg:'R_UPPER_LEG',       RightUpLeg:'R_UPPER_LEG',
+  mixamorigRightLeg:'R_LOWER_LEG',         RightLeg:'R_LOWER_LEG',
 };
 
 var _fbxReady=false;
@@ -531,86 +539,47 @@ function loadFBXLibs(cb){
   });
 }
 
-function extractBoneName(trackName){
-  var m1=trackName.match(/\[([^\]]+)\]\.quaternion$/);if(m1)return m1[1];
-  var m2=trackName.match(/^([^.]+)\.quaternion$/);if(m2)return m2[1];
-  return null;
-}
-function sampleQuat(track,t){
-  var ts=track.times,vs=track.values,n=ts.length;
-  if(!n)return new THREE.Quaternion();
-  if(t<=ts[0])return new THREE.Quaternion(vs[0],vs[1],vs[2],vs[3]);
-  if(t>=ts[n-1])return new THREE.Quaternion(vs[(n-1)*4],vs[(n-1)*4+1],vs[(n-1)*4+2],vs[(n-1)*4+3]);
-  var lo=0,hi=n-1,mid;
-  while(hi-lo>1){mid=(lo+hi)>>1;if(ts[mid]<=t)lo=mid;else hi=mid;}
-  var a=(t-ts[lo])/(ts[hi]-ts[lo]);
-  var q0=new THREE.Quaternion(vs[lo*4],vs[lo*4+1],vs[lo*4+2],vs[lo*4+3]);
-  var q1=new THREE.Quaternion(vs[hi*4],vs[hi*4+1],vs[hi*4+2],vs[hi*4+3]);
-  return q0.slerp(q1,a);
-}
-
 function parseFBXAnim(obj){
   if(!obj.animations||!obj.animations.length)
     throw new Error('Aucune animation dans ce fichier');
   var clip=obj.animations[0];
   var FPS=30,frameCount=Math.ceil(clip.duration*FPS)+1;
 
-  var tracksByBone={};
-  for(var ti=0;ti<clip.tracks.length;ti++){
-    var track=clip.tracks[ti];
-    if(track.name.indexOf('.quaternion')===-1)continue;
-    var mx=extractBoneName(track.name);if(!mx)continue;
-    var ourId=MIXAMO_MAP[mx];if(!ourId)continue;
-    if(!tracksByBone[ourId])tracksByBone[ourId]=[];
-    tracksByBone[ourId].push(track);
-  }
-  var mapped=Object.keys(tracksByBone);
-  if(!mapped.length)throw new Error('Aucun os Mixamo reconnu dans ce fichier');
+  // Build name→node map (AnimationMixer évalue correctement les pre/post-rotations FBX)
+  var nodeByName={};
+  obj.traverse(function(node){if(node.name)nodeByName[node.name]=node;});
+
+  var mnames=Object.keys(MIXAMO_MAP).filter(function(k){return MIXAMO_MAP[k]&&nodeByName[k];});
+  if(!mnames.length)throw new Error('Aucun os Mixamo reconnu dans ce fichier');
+
+  var mixer=new THREE.AnimationMixer(obj);
+  mixer.clipAction(clip).play();
+
+  // Capture la T-pose à t=0 pour normalisation delta
+  mixer.setTime(0);
+  var bindQ={};
+  mnames.forEach(function(mn){bindQ[mn]=nodeByName[mn].quaternion.clone();});
 
   var frames=[];
   for(var f=0;f<frameCount;f++){
-    var t=f/FPS,frame={};
-    for(var bi=0;bi<mapped.length;bi++){
-      var id=mapped[bi],tracks=tracksByBone[id];
-      var qx=0,qy=0,qz=0,qw=0;
-      for(var tr=0;tr<tracks.length;tr++){
-        var q=sampleQuat(tracks[tr],t);
-        qx+=q.x;qy+=q.y;qz+=q.z;qw+=q.w;
-      }
-      var nn=tracks.length;
-      var avg=new THREE.Quaternion(qx/nn,qy/nn,qz/nn,qw/nn).normalize();
-      var euler=new THREE.Euler().setFromQuaternion(avg,'XYZ');
-      frame[id]={x:euler.x,y:euler.y,z:euler.z};
-    }
+    mixer.setTime(f/FPS);
+    var accum={};
+    mnames.forEach(function(mn){
+      var ourId=MIXAMO_MAP[mn];
+      // delta = bindQ^-1 × frameQ : rotation pure depuis la T-pose, en espace local os
+      var qDelta=bindQ[mn].clone().invert().multiply(nodeByName[mn].quaternion.clone());
+      if(!accum[ourId])accum[ourId]={qx:0,qy:0,qz:0,qw:0,n:0};
+      var a=accum[ourId];
+      a.qx+=qDelta.x;a.qy+=qDelta.y;a.qz+=qDelta.z;a.qw+=qDelta.w;a.n++;
+    });
+    var frame={};
+    Object.keys(accum).forEach(function(aid){
+      var a=accum[aid],n=a.n;
+      var avg=new THREE.Quaternion(a.qx/n,a.qy/n,a.qz/n,a.qw/n).normalize();
+      var e=new THREE.Euler().setFromQuaternion(avg,'XYZ');
+      frame[aid]={x:e.x,y:e.y,z:e.z};
+    });
     frames.push(frame);
-  }
-
-  // Normalisation delta T-pose : Mixamo embarque souvent une correction de coordonnées
-  // dans la pose de repos (ex. -90° X sur Hips). On soustrait le frame 0 de tous les frames
-  // pour ne garder que le mouvement delta par rapport à la T-pose.
-  if(frames.length>1){
-    var rest={};
-    var rkeys=Object.keys(frames[0]);
-    for(var ri=0;ri<rkeys.length;ri++){
-      var rid=rkeys[ri];
-      var r0=frames[0][rid];
-      rest[rid]=new THREE.Quaternion()
-        .setFromEuler(new THREE.Euler(r0.x,r0.y,r0.z,'XYZ'))
-        .invert();
-    }
-    for(var fn=0;fn<frames.length;fn++){
-      var fkeys=Object.keys(frames[fn]);
-      for(var fki=0;fki<fkeys.length;fki++){
-        var fid=fkeys[fki];
-        if(!rest[fid])continue;
-        var fr=frames[fn][fid];
-        var qC=new THREE.Quaternion().setFromEuler(new THREE.Euler(fr.x,fr.y,fr.z,'XYZ'));
-        // delta = q0^-1 * qFrame → rotation depuis la T-pose
-        var qD=rest[fid].clone().multiply(qC);
-        var ed=new THREE.Euler().setFromQuaternion(qD,'XYZ');
-        frames[fn][fid]={x:ed.x,y:ed.y,z:ed.z};
-      }
-    }
   }
 
   return{name:clip.name,fps:FPS,frameCount:frameCount,duration:clip.duration,frames:frames};
