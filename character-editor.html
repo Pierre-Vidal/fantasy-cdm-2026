@@ -1,0 +1,696 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Character Editor — Fantasy CDM</title>
+<style>
+:root{--bg:#08090d;--sf:#10131c;--bd:#1c2236;--ac:#3ddc84;--tx:#e6e9f4;--mu:#424a66;--ct:#181d2a;--c2:#1e2438}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 10px}
+header{font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:.28em;text-transform:uppercase;color:var(--ac);margin-bottom:12px}
+.editor{display:grid;grid-template-columns:1fr 280px;width:100%;max-width:860px;background:var(--sf);border:1px solid var(--bd);border-radius:14px;overflow:hidden}
+.left{display:flex;flex-direction:column;background:radial-gradient(ellipse 70% 55% at 45% 38%,#0d1828 0%,#050609 100%);min-height:460px}
+#c{display:block;flex:1;cursor:grab;touch-action:none;width:100%}
+#c:active{cursor:grabbing}
+.vp-hint{font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);text-align:center;padding:4px 0 2px}
+.anim-bar{display:flex;gap:5px;padding:8px 10px;background:rgba(0,0,0,.5);border-top:1px solid var(--bd);flex-wrap:wrap}
+.anim-btn{flex:1;min-width:62px;background:var(--ct);color:var(--mu);border:1px solid var(--bd);border-radius:6px;font-family:'Courier New',monospace;font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;padding:6px 3px;cursor:pointer;transition:all .13s;white-space:nowrap}
+.anim-btn:hover{background:var(--c2);color:var(--tx)}
+.anim-btn.active{background:var(--ac);color:#03200d;border-color:var(--ac);font-weight:700}
+.fbx-zone{margin:8px 10px;border:1.5px dashed var(--bd);border-radius:8px;padding:12px 8px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:.65rem;color:var(--mu)}
+.fbx-zone:hover,.fbx-zone.drag-over{border-color:var(--ac);color:var(--ac)}
+.fbx-status{margin:4px 10px 8px;font-family:'Courier New',monospace;font-size:.6rem;color:var(--mu);text-align:center;min-height:1.2em}
+.fbx-status.ok{color:var(--ac)}
+.fbx-status.err{color:#ff6b6b}
+.right{border-left:1px solid var(--bd);padding:14px 12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
+.lbl{font-family:'Courier New',monospace;font-size:.56rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mu);margin-bottom:4px}
+.ctrl{display:flex;flex-direction:column}
+input[type=text],input[type=number]{background:var(--ct);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'Courier New',monospace;padding:6px 10px;outline:none;transition:border-color .13s;width:100%;font-size:.88rem}
+input[type=text]:focus,input[type=number]:focus{border-color:var(--ac)}
+input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chip{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .12s,border-color .12s}
+.chip:hover{transform:scale(1.18)}
+.chip.sel{border-color:var(--ac)}
+#face-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:1.5px;background:var(--bd);border:1.5px solid var(--bd);border-radius:5px;overflow:hidden;cursor:crosshair;user-select:none}
+.px{aspect-ratio:1;background:var(--ct)}
+.px:hover{filter:brightness(1.5)}
+#palette{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
+.pc{aspect-ratio:1;border-radius:4px;cursor:pointer;border:1.5px solid transparent;transition:transform .1s,border-color .1s;display:flex;align-items:center;justify-content:center;font-size:.6rem}
+.pc:hover{transform:scale(1.12)}
+.pc.sel{border-color:var(--ac)}
+.sep{height:1px;background:var(--bd)}
+.row{display:flex;gap:6px}
+.btn-sm{flex:1;background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-family:'Courier New',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:5px;cursor:pointer;transition:all .13s}
+.btn-sm:hover{border-color:var(--ac);color:var(--ac)}
+@media(max-width:600px){.editor{grid-template-columns:1fr}.right{border-left:none;border-top:1px solid var(--bd)}}
+</style>
+</head>
+<body>
+<header>⬛ Character Editor — Rigged 11 bones + FBX import</header>
+<div class="editor">
+  <div class="left">
+    <canvas id="c"></canvas>
+    <div class="vp-hint">Drag to rotate · Dbl-click: auto-rotate</div>
+    <div class="anim-bar">
+      <button class="anim-btn active" data-anim="idle">🧍 Idle</button>
+      <button class="anim-btn" data-anim="walk">🚶 Marche</button>
+      <button class="anim-btn" data-anim="run">🏃 Course</button>
+      <button class="anim-btn" data-anim="goal">🎉 But!</button>
+      <button class="anim-btn" data-anim="tackle">💪 Tacle</button>
+      <button class="anim-btn" data-anim="dance">🕺 Danse</button>
+      <button class="anim-btn" id="btn-fbx-play" data-anim="imported" style="display:none">📦 FBX</button>
+    </div>
+    <div class="fbx-zone" id="fbx-zone">
+      📁 Déposer un fichier <strong>.fbx</strong> Mixamo ici<br>
+      <span style="font-size:.58rem;opacity:.6">ou cliquer pour ouvrir</span>
+    </div>
+    <div class="fbx-status" id="fbx-status"></div>
+    <input type="file" id="fbx-input" accept=".fbx" style="display:none">
+  </div>
+  <div class="right">
+    <div class="ctrl"><div class="lbl">Nom du joueur</div>
+      <input type="text" id="inp-name" value="Mbappé" maxlength="14">
+    </div>
+    <div class="ctrl"><div class="lbl">Numéro</div>
+      <input type="number" id="inp-num" value="10" min="1" max="99">
+    </div>
+    <div class="sep"></div>
+    <div class="ctrl"><div class="lbl">Couleur de peau</div>
+      <div class="chips" id="skin-chips"></div>
+    </div>
+    <div class="ctrl"><div class="lbl">Maillot</div>
+      <div class="chips" id="jersey-chips"></div>
+    </div>
+    <div class="sep"></div>
+    <div class="ctrl">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <div class="lbl" style="margin:0">Visage 10×10</div>
+        <div class="row" style="gap:4px">
+          <button class="btn-sm" id="btn-clear">Effacer</button>
+        </div>
+      </div>
+      <div id="face-grid"></div>
+      <div id="palette"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Three.js via importmap pour FBX uniquement -->
+<script type="importmap">
+{"imports":{
+  "three":"https://cdn.jsdelivr.net/npm/three@0.157.0/build/three.module.js",
+  "three/addons/":"https://cdn.jsdelivr.net/npm/three@0.157.0/examples/jsm/"
+}}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+'use strict';
+
+// ═══════════════════════════════════════════════════════
+// STATE
+// ═══════════════════════════════════════════════════════
+const S = {
+  vRotY:.42, vRotX:-.16,
+  dragging:false, lastX:0, lastY:0, autoRot:true,
+  skinColor:'#d4956a', jerseyColor:'#1a4fd6',
+  name:'Mbappé', num:'10',
+  faceGrid:Array.from({length:10},()=>Array(10).fill(null)),
+  paintColor:'#2c1a0e', painting:false,
+  anim:'idle', animT:0, charYOff:0,
+  importedAnim:null,
+};
+
+const SKIN_COLS   = ['#f5c89a','#e0a87a','#c68642','#8d5524','#4a2810'];
+const JERSEY_COLS = ['#1a4fd6','#cc2222','#1a8c3c','#e07b00','#111128','#d8d8d8'];
+const FACE_PAL    = ['#f5c89a','#e0a87a','#c68642','#8d5524','#4a2810',
+                     '#2c1a0e','#0a0a0a','#d4a017','#7a3b1e','#f0e6c0',
+                     '#e06060','#ffffff',null];
+const LIGHT = norm3({x:.55,y:.85,z:.72});
+
+// ═══════════════════════════════════════════════════════
+// MATH
+// ═══════════════════════════════════════════════════════
+const add3=(a,b)=>({x:a.x+b.x,y:a.y+b.y,z:a.z+b.z});
+const sub3=(a,b)=>({x:a.x-b.x,y:a.y-b.y,z:a.z-b.z});
+const dot3=(a,b)=>a.x*b.x+a.y*b.y+a.z*b.z;
+function norm3(v){const l=Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z)||1;return{x:v.x/l,y:v.y/l,z:v.z/l}}
+const rX=(p,a)=>{const c=Math.cos(a),s=Math.sin(a);return{x:p.x,y:p.y*c-p.z*s,z:p.y*s+p.z*c}};
+const rY=(p,a)=>{const c=Math.cos(a),s=Math.sin(a);return{x:p.x*c-p.z*s,y:p.y,z:p.x*s+p.z*c}};
+const rZ=(p,a)=>{const c=Math.cos(a),s=Math.sin(a);return{x:p.x*c-p.y*s,y:p.x*s+p.y*c,z:p.z}};
+function applyRot(p,r){let q=p;if(r.x)q=rX(q,r.x);if(r.y)q=rY(q,r.y);if(r.z)q=rZ(q,r.z);return q}
+function aroundPivot(p,piv,rot){return add3(applyRot(sub3(p,piv),rot),piv)}
+function shadeHex(hex,f){
+  const r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
+  return`rgb(${Math.min(255,r*f|0)},${Math.min(255,g*f|0)},${Math.min(255,b*f|0)})`
+}
+
+// ═══════════════════════════════════════════════════════
+// SKELETON — 11 bones avec hiérarchie complète
+// Repères: pieds y=-6, hanches y=6, épaules y=18, tête y=26
+// ═══════════════════════════════════════════════════════
+const BONES = {
+  //           id           box center    box dims       pivot (articulation)   parent
+  HIPS:        mk('HIPS',  0,  9, 0,  7, 6,4,  0, 6,0,  null),
+  SPINE:       mk('SPINE', 0, 15, 0,  8, 6,4,  0,12,0,  'HIPS'),
+  HEAD:        mk('HEAD',  0, 22, 0,  8, 8,8,  0,18,0,  'SPINE'),
+  L_UPPER_ARM: mk('L_UPPER_ARM', -6,15,0, 4,6,3, -6,18,0, 'SPINE'),
+  L_LOWER_ARM: mk('L_LOWER_ARM', -6, 9,0, 3,6,3, -6,12,0, 'L_UPPER_ARM'),
+  R_UPPER_ARM: mk('R_UPPER_ARM',  6,15,0, 4,6,3,  6,18,0, 'SPINE'),
+  R_LOWER_ARM: mk('R_LOWER_ARM',  6, 9,0, 3,6,3,  6,12,0, 'R_UPPER_ARM'),
+  L_UPPER_LEG: mk('L_UPPER_LEG',-2, 3,0,  4,6,4, -2, 6,0, 'HIPS'),
+  L_LOWER_LEG: mk('L_LOWER_LEG',-2,-3,0,  4,6,4, -2, 0,0, 'L_UPPER_LEG'),
+  R_UPPER_LEG: mk('R_UPPER_LEG', 2, 3,0,  4,6,4,  2, 6,0, 'HIPS'),
+  R_LOWER_LEG: mk('R_LOWER_LEG', 2,-3,0,  4,6,4,  2, 0,0, 'R_UPPER_LEG'),
+};
+
+function mk(id,bx,by,bz,bw,bh,bd, px,py,pz, parent){
+  return{id, box:{x:bx,y:by,z:bz,w:bw,h:bh,d:bd},
+         pivot:{x:px,y:py,z:pz}, parent, rot:{x:0,y:0,z:0}};
+}
+
+// Pre-compute ancestor chains for transform
+const CHAINS = {};
+Object.keys(BONES).forEach(id=>{
+  const c=[];let cur=id;
+  while(cur){c.push(cur);cur=BONES[cur]?.parent;}
+  CHAINS[id]=c;
+});
+
+function worldPos(v,boneId){
+  let p=v;
+  for(const id of CHAINS[boneId]) p=aroundPivot(p,BONES[id].pivot,BONES[id].rot);
+  p={x:p.x,y:p.y+S.charYOff,z:p.z};
+  return p;
+}
+function worldNorm(n,boneId){
+  let q=n;
+  for(const id of CHAINS[boneId]) q=applyRot(q,BONES[id].rot);
+  return q;
+}
+
+// ═══════════════════════════════════════════════════════
+// CANVAS + PROJECTION
+// ═══════════════════════════════════════════════════════
+const canvas=document.getElementById('c');
+const ctx=canvas.getContext('2d');
+let CX,CY,SCALE;
+
+function resize(){
+  const vp=canvas.parentElement;
+  const ab=vp.querySelector('.anim-bar');
+  canvas.width=vp.clientWidth;
+  canvas.height=Math.max(340,vp.clientHeight-(ab?ab.offsetHeight+50:50));
+  SCALE=Math.min(canvas.width,canvas.height)/54;
+  CX=canvas.width*.5; CY=canvas.height*.54;
+}
+
+function project(p){
+  const r=rX(rY(p,S.vRotY),S.vRotX);
+  return{x:CX+r.x*SCALE,y:CY-r.y*SCALE,z:r.z};
+}
+
+// ═══════════════════════════════════════════════════════
+// BONE COLOR
+// ═══════════════════════════════════════════════════════
+function boneColor(id){
+  if(id==='HEAD') return S.skinColor;
+  if(id==='L_LOWER_LEG'||id==='R_LOWER_LEG'||id==='L_UPPER_LEG'||id==='R_UPPER_LEG') return '#111128';
+  if(id==='L_LOWER_ARM'||id==='R_LOWER_ARM') return S.skinColor; // forearms = skin
+  return S.jerseyColor;
+}
+
+// ═══════════════════════════════════════════════════════
+// FACE GEOMETRY
+// ═══════════════════════════════════════════════════════
+function getBoneFaces(bone){
+  const{x,y,z,w,h,d}=bone.box;
+  const hw=w/2,hh=h/2,hd=d/2;
+  // 8 corners in T-pose
+  const C=[
+    {x:x-hw,y:y+hh,z:z+hd},{x:x+hw,y:y+hh,z:z+hd}, // 0tfl 1tfr
+    {x:x-hw,y:y+hh,z:z-hd},{x:x+hw,y:y+hh,z:z-hd}, // 2tbl 3tbr
+    {x:x-hw,y:y-hh,z:z+hd},{x:x+hw,y:y-hh,z:z+hd}, // 4bfl 5bfr
+    {x:x-hw,y:y-hh,z:z-hd},{x:x+hw,y:y-hh,z:z-hd}, // 6bbl 7bbr
+  ].map(v=>worldPos(v,bone.id));
+
+  const FACES=[
+    {fn:'top',   vi:[2,3,1,0],n:{x:0,y:1,z:0}},
+    {fn:'bot',   vi:[4,5,7,6],n:{x:0,y:-1,z:0}},
+    {fn:'front', vi:[0,1,5,4],n:{x:0,y:0,z:1}},
+    {fn:'back',  vi:[3,2,6,7],n:{x:0,y:0,z:-1}},
+    {fn:'left',  vi:[2,0,4,6],n:{x:-1,y:0,z:0}},
+    {fn:'right', vi:[1,3,7,5],n:{x:1,y:0,z:0}},
+  ];
+
+  const out=[];
+  for(const fd of FACES){
+    const wn=rX(rY(worldNorm(fd.n,bone.id),S.vRotY),S.vRotX);
+    if(wn.z<=0) continue; // cull back faces
+    const v2d=fd.vi.map(i=>project(C[i]));
+    const centZ=v2d.reduce((s,v)=>s+v.z,0)/4;
+    const shad=.28+.72*Math.max(0,dot3(wn,LIGHT));
+    out.push({fn:fd.fn,v2d,centZ,shad,bone});
+  }
+  return out;
+}
+
+// Bilinear interp for face pixel grid
+function bilerp(tl,tr,br,bl,u,v){
+  const tx=tl.x+(tr.x-tl.x)*u,ty=tl.y+(tr.y-tl.y)*u;
+  const bx=bl.x+(br.x-bl.x)*u,by=bl.y+(br.y-bl.y)*u;
+  return{x:tx+(bx-tx)*v,y:ty+(by-ty)*v};
+}
+function drawFaceGrid(v2d,grid,shad){
+  const[tl,tr,br,bl]=v2d,N=10;
+  for(let row=0;row<N;row++)for(let col=0;col<N;col++){
+    const c=grid[row][col];if(!c)continue;
+    const u0=col/N,u1=(col+1)/N,v0=row/N,v1=(row+1)/N;
+    const p00=bilerp(tl,tr,br,bl,u0,v0),p10=bilerp(tl,tr,br,bl,u1,v0);
+    const p11=bilerp(tl,tr,br,bl,u1,v1),p01=bilerp(tl,tr,br,bl,u0,v1);
+    ctx.fillStyle=shadeHex(c,shad);
+    ctx.beginPath();
+    ctx.moveTo(p00.x,p00.y);ctx.lineTo(p10.x,p10.y);
+    ctx.lineTo(p11.x,p11.y);ctx.lineTo(p01.x,p01.y);
+    ctx.closePath();ctx.fill();
+  }
+}
+
+// ═══════════════════════════════════════════════════════
+// MAIN RENDER
+// ═══════════════════════════════════════════════════════
+let chestFrontV2d=null,chestFrontShad=1;
+
+function render(){
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  chestFrontV2d=null;
+
+  const allFaces=[];
+  for(const bone of Object.values(BONES))
+    for(const f of getBoneFaces(bone)) allFaces.push(f);
+  allFaces.sort((a,b)=>a.centZ-b.centZ);
+
+  for(const f of allFaces){
+    const base=boneColor(f.bone.id);
+    ctx.fillStyle=shadeHex(base,f.shad);
+    ctx.beginPath();
+    ctx.moveTo(f.v2d[0].x,f.v2d[0].y);
+    for(let i=1;i<f.v2d.length;i++)ctx.lineTo(f.v2d[i].x,f.v2d[i].y);
+    ctx.closePath();ctx.fill();
+
+    if(f.bone.id==='HEAD'&&f.fn==='front') drawFaceGrid(f.v2d,S.faceGrid,f.shad);
+    if(f.bone.id==='SPINE'&&f.fn==='front'){chestFrontV2d=f.v2d;chestFrontShad=f.shad;}
+
+    ctx.strokeStyle='rgba(0,0,0,.2)';ctx.lineWidth=.5;
+    ctx.beginPath();ctx.moveTo(f.v2d[0].x,f.v2d[0].y);
+    for(let i=1;i<f.v2d.length;i++)ctx.lineTo(f.v2d[i].x,f.v2d[i].y);
+    ctx.closePath();ctx.stroke();
+  }
+
+  // Jersey number
+  if(chestFrontV2d){
+    const cx=chestFrontV2d.reduce((s,v)=>s+v.x,0)/4;
+    const cy=chestFrontV2d.reduce((s,v)=>s+v.y,0)/4;
+    const sz=SCALE*2.2;
+    ctx.font=`900 ${sz}px 'Courier New',monospace`;
+    ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillStyle=`rgba(0,0,0,${.4*chestFrontShad})`;ctx.fillText(S.num,cx+1,cy+1);
+    ctx.fillStyle=`rgba(255,255,255,${.82*chestFrontShad})`;ctx.fillText(S.num,cx,cy);
+  }
+
+  // Name
+  const nsz=Math.max(8,SCALE*.82);
+  ctx.font=`700 ${nsz}px 'Courier New',monospace`;
+  ctx.textAlign='center';ctx.textBaseline='top';
+  ctx.fillStyle='rgba(230,233,244,.38)';
+  ctx.fillText(S.name,CX,CY+SCALE*9.6);
+}
+
+// ═══════════════════════════════════════════════════════
+// BUILT-IN ANIMATIONS
+// ═══════════════════════════════════════════════════════
+const B=BONES;
+function resetBones(){Object.values(B).forEach(b=>b.rot={x:0,y:0,z:0});S.charYOff=0;}
+
+const ANIMS={
+  idle(t){
+    B.HEAD.rot       ={x:0,y:Math.sin(t*.7)*.12,z:Math.sin(t*.4)*.03};
+    B.L_UPPER_ARM.rot={x:Math.sin(t*.9)*.07,y:0,z:Math.sin(t*.6)*.04};
+    B.R_UPPER_ARM.rot={x:Math.sin(t*.9+1)*.07,y:0,z:-Math.sin(t*.6)*.04};
+    B.HIPS.rot       ={x:0,y:0,z:Math.sin(t*.5)*.012};
+  },
+  walk(t){
+    const s=Math.sin(t*3.5),c=Math.cos(t*3.5);
+    B.L_UPPER_LEG.rot={x:-s*.52,y:0,z:0};B.R_UPPER_LEG.rot={x:s*.52,y:0,z:0};
+    B.L_LOWER_LEG.rot={x:Math.max(0,s)*.55,y:0,z:0};
+    B.R_LOWER_LEG.rot={x:Math.max(0,-s)*.55,y:0,z:0};
+    B.L_UPPER_ARM.rot={x:s*.38,y:0,z:0};B.R_UPPER_ARM.rot={x:-s*.38,y:0,z:0};
+    B.L_LOWER_ARM.rot={x:Math.max(0,s)*.3,y:0,z:0};
+    B.R_LOWER_ARM.rot={x:Math.max(0,-s)*.3,y:0,z:0};
+    B.HEAD.rot={x:Math.abs(s)*.04,y:0,z:0};
+    B.HIPS.rot={x:0,y:0,z:s*.025};
+  },
+  run(t){
+    S.charYOff=Math.abs(Math.sin(t*5))*.8;
+    const s=Math.sin(t*5.5);
+    B.L_UPPER_LEG.rot={x:-s*.85,y:0,z:0};B.R_UPPER_LEG.rot={x:s*.85,y:0,z:0};
+    B.L_LOWER_LEG.rot={x:Math.max(0,s)*1.0,y:0,z:0};
+    B.R_LOWER_LEG.rot={x:Math.max(0,-s)*1.0,y:0,z:0};
+    B.L_UPPER_ARM.rot={x:s*.65,y:0,z:0};B.R_UPPER_ARM.rot={x:-s*.65,y:0,z:0};
+    B.L_LOWER_ARM.rot={x:.4+Math.max(0,s)*.4,y:0,z:0};
+    B.R_LOWER_ARM.rot={x:.4+Math.max(0,-s)*.4,y:0,z:0};
+    B.SPINE.rot={x:.12,y:0,z:s*.04};
+    B.HEAD.rot={x:-.1+Math.abs(s)*.06,y:0,z:0};
+  },
+  goal(t){
+    S.charYOff=Math.abs(Math.sin(t*3))*3.5;
+    const p=Math.sin(t*3);
+    B.L_UPPER_ARM.rot={x:0,y:0,z:-2.1+p*.2};B.R_UPPER_ARM.rot={x:0,y:0,z:2.1-p*.2};
+    B.L_LOWER_ARM.rot={x:-.2,y:0,z:p*.15};B.R_LOWER_ARM.rot={x:-.2,y:0,z:-p*.15};
+    B.HEAD.rot={x:-.2,y:Math.sin(t*2)*.2,z:0};
+    B.L_UPPER_LEG.rot={x:Math.sin(t*3)*.18,y:0,z:0};
+    B.R_UPPER_LEG.rot={x:-Math.sin(t*3)*.18,y:0,z:0};
+    B.SPINE.rot={x:-.05,y:0,z:p*.03};
+  },
+  tackle(t){
+    B.HIPS.rot={x:.6,y:0,z:0};
+    B.R_UPPER_LEG.rot={x:-1.05,y:0,z:0};B.R_LOWER_LEG.rot={x:.3,y:0,z:0};
+    B.L_UPPER_LEG.rot={x:.4,y:0,z:.12};B.L_LOWER_LEG.rot={x:.5,y:0,z:0};
+    B.L_UPPER_ARM.rot={x:-.6,y:0,z:-.35};B.L_LOWER_ARM.rot={x:-.3,y:0,z:0};
+    B.R_UPPER_ARM.rot={x:-.4,y:0,z:.3};B.R_LOWER_ARM.rot={x:-.2,y:0,z:0};
+    B.HEAD.rot={x:-.25+Math.sin(t)*.03,y:Math.sin(t*.8)*.08,z:0};
+  },
+  dance(t){
+    S.charYOff=Math.abs(Math.sin(t*4))*.5;
+    const s=Math.sin(t*4);
+    B.L_UPPER_ARM.rot={x:s*.2,y:0,z:-1.5-s*.7};
+    B.R_UPPER_ARM.rot={x:-s*.2,y:0,z:1.5+s*.7};
+    B.L_LOWER_ARM.rot={x:.2+Math.abs(s)*.4,y:0,z:0};
+    B.R_LOWER_ARM.rot={x:.2+Math.abs(s)*.4,y:0,z:0};
+    B.HEAD.rot={x:0,y:Math.sin(t*2)*.35,z:Math.sin(t*4)*.1};
+    B.L_UPPER_LEG.rot={x:s*.25,y:0,z:0};B.R_UPPER_LEG.rot={x:-s*.25,y:0,z:0};
+    B.L_LOWER_LEG.rot={x:Math.max(0,s)*.3,y:0,z:0};
+    B.R_LOWER_LEG.rot={x:Math.max(0,-s)*.3,y:0,z:0};
+    B.HIPS.rot={x:0,y:0,z:Math.sin(t*2)*.06};
+  },
+  imported(t){
+    if(!S.importedAnim)return;
+    const{fps,frameCount,frames}=S.importedAnim;
+    const fi=Math.floor(t*fps)%frameCount;
+    const frame=frames[fi];
+    if(!frame)return;
+    Object.entries(frame).forEach(([id,r])=>{
+      if(BONES[id]) BONES[id].rot={...r};
+    });
+  },
+};
+
+// ═══════════════════════════════════════════════════════
+// FBX IMPORT
+// ═══════════════════════════════════════════════════════
+// Mixamo bone name → notre os
+const MIXAMO_MAP={
+  mixamorigHips:'HIPS',         Hips:'HIPS',
+  mixamorigSpine:'HIPS',        Spine:'HIPS',      // merge lower spine into hips
+  mixamorigSpine1:'SPINE',      Spine1:'SPINE',
+  mixamorigSpine2:'SPINE',      Spine2:'SPINE',
+  mixamorigNeck:null,           Neck:null,
+  mixamorigHead:'HEAD',         Head:'HEAD',
+  mixamorigLeftShoulder:null,   LeftShoulder:null,
+  mixamorigLeftArm:'L_UPPER_ARM',    LeftArm:'L_UPPER_ARM',
+  mixamorigLeftForeArm:'L_LOWER_ARM',LeftForeArm:'L_LOWER_ARM',
+  mixamorigLeftHand:null,            LeftHand:null,
+  mixamorigRightShoulder:null,  RightShoulder:null,
+  mixamorigRightArm:'R_UPPER_ARM',   RightArm:'R_UPPER_ARM',
+  mixamorigRightForeArm:'R_LOWER_ARM',RightForeArm:'R_LOWER_ARM',
+  mixamorigRightHand:null,           RightHand:null,
+  mixamorigLeftUpLeg:'L_UPPER_LEG',  LeftUpLeg:'L_UPPER_LEG',
+  mixamorigLeftLeg:'L_LOWER_LEG',    LeftLeg:'L_LOWER_LEG',
+  mixamorigLeftFoot:null,            LeftFoot:null,
+  mixamorigRightUpLeg:'R_UPPER_LEG', RightUpLeg:'R_UPPER_LEG',
+  mixamorigRightLeg:'R_LOWER_LEG',   RightLeg:'R_LOWER_LEG',
+  mixamorigRightFoot:null,           RightFoot:null,
+};
+
+function sampleQuat(track,t){
+  const ts=track.times,vs=track.values,n=ts.length;
+  if(t<=ts[0]) return new THREE.Quaternion().fromArray(vs,0);
+  if(t>=ts[n-1]) return new THREE.Quaternion().fromArray(vs,(n-1)*4);
+  let lo=0,hi=n-1;
+  while(hi-lo>1){const m=(lo+hi)>>1;if(ts[m]<=t)lo=m;else hi=m;}
+  const a=(t-ts[lo])/(ts[hi]-ts[lo]);
+  const q0=new THREE.Quaternion().fromArray(vs,lo*4);
+  const q1=new THREE.Quaternion().fromArray(vs,hi*4);
+  return q0.slerp(q1,a);
+}
+
+function extractBoneName(trackName){
+  // Handles: "mixamorigHips.quaternion" and "Object.bones[mixamorigHips].quaternion"
+  const bracket=trackName.match(/\[([^\]]+)\]\.quaternion$/);
+  if(bracket) return bracket[1];
+  const dot=trackName.match(/^([^.]+)\.quaternion$/);
+  if(dot) return dot[1];
+  return null;
+}
+
+async function loadFBX(file){
+  const loader=new FBXLoader();
+  const buf=await file.arrayBuffer();
+  const url=URL.createObjectURL(new Blob([buf],{type:'application/octet-stream'}));
+  return new Promise((res,rej)=>{
+    loader.load(url,obj=>{URL.revokeObjectURL(url);res(obj);},undefined,rej);
+  });
+}
+
+async function processFBX(file){
+  const obj=await loadFBX(file);
+  if(!obj.animations?.length) throw new Error('Aucune animation dans ce fichier');
+
+  const clip=obj.animations[0];
+  const FPS=30;
+  const frameCount=Math.ceil(clip.duration*FPS)+1;
+
+  // Collect quaternion tracks per target bone
+  const tracksByBone={};
+  for(const track of clip.tracks){
+    if(!track.name.endsWith('.quaternion')) continue;
+    const mixName=extractBoneName(track.name);
+    if(!mixName) continue;
+    const ourId=MIXAMO_MAP[mixName];
+    if(!ourId) continue;
+    if(!tracksByBone[ourId]) tracksByBone[ourId]=[];
+    tracksByBone[ourId].push(track);
+  }
+
+  if(!Object.keys(tracksByBone).length) throw new Error('Aucun os Mixamo reconnu');
+
+  // Sample animation at FPS
+  const frames=[];
+  for(let f=0;f<frameCount;f++){
+    const t=f/FPS;
+    const frame={};
+    for(const[ourId,tracks]of Object.entries(tracksByBone)){
+      // Average quaternions when multiple mixamorig bones map to same target
+      let qx=0,qy=0,qz=0,qw=0;
+      for(const track of tracks){
+        const q=sampleQuat(track,t);
+        qx+=q.x;qy+=q.y;qz+=q.z;qw+=q.w;
+      }
+      const n=tracks.length;
+      const qAvg=new THREE.Quaternion(qx/n,qy/n,qz/n,qw/n).normalize();
+      const e=new THREE.Euler().setFromQuaternion(qAvg,'XYZ');
+      frame[ourId]={x:e.x,y:e.y,z:e.z};
+    }
+    frames.push(frame);
+  }
+
+  return{name:clip.name,fps:FPS,frameCount,duration:clip.duration,frames};
+}
+
+// ═══════════════════════════════════════════════════════
+// ANIMATION LOOP
+// ═══════════════════════════════════════════════════════
+let last=0;
+function loop(ts=0){
+  const dt=Math.min((ts-last)/1000,.04);last=ts;
+  S.animT+=dt;
+  resetBones();
+  if(ANIMS[S.anim]) ANIMS[S.anim](S.animT);
+  if(S.autoRot&&!S.dragging) S.vRotY+=.007;
+  render();
+  requestAnimationFrame(loop);
+}
+
+// ═══════════════════════════════════════════════════════
+// DRAG CONTROLS
+// ═══════════════════════════════════════════════════════
+canvas.addEventListener('mousedown',e=>{S.dragging=true;S.autoRot=false;S.lastX=e.clientX;S.lastY=e.clientY;});
+window.addEventListener('mousemove',e=>{
+  if(!S.dragging)return;
+  S.vRotY+=(e.clientX-S.lastX)*.013;S.vRotX+=(e.clientY-S.lastY)*.013;
+  S.vRotX=Math.max(-1.1,Math.min(1.1,S.vRotX));
+  S.lastX=e.clientX;S.lastY=e.clientY;
+});
+window.addEventListener('mouseup',()=>S.dragging=false);
+canvas.addEventListener('dblclick',()=>S.autoRot=true);
+canvas.addEventListener('touchstart',e=>{e.preventDefault();S.dragging=true;S.autoRot=false;S.lastX=e.touches[0].clientX;S.lastY=e.touches[0].clientY;},{passive:false});
+canvas.addEventListener('touchmove',e=>{
+  e.preventDefault();if(!S.dragging)return;
+  S.vRotY+=(e.touches[0].clientX-S.lastX)*.013;S.vRotX+=(e.touches[0].clientY-S.lastY)*.013;
+  S.vRotX=Math.max(-1.1,Math.min(1.1,S.vRotX));
+  S.lastX=e.touches[0].clientX;S.lastY=e.touches[0].clientY;
+},{passive:false});
+canvas.addEventListener('touchend',()=>S.dragging=false);
+
+// ═══════════════════════════════════════════════════════
+// ANIMATION BUTTONS
+// ═══════════════════════════════════════════════════════
+document.querySelectorAll('.anim-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    document.querySelectorAll('.anim-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+    S.anim=btn.dataset.anim;S.animT=0;
+  });
+});
+
+// ═══════════════════════════════════════════════════════
+// FBX DROP ZONE
+// ═══════════════════════════════════════════════════════
+const fbxZone=document.getElementById('fbx-zone');
+const fbxInput=document.getElementById('fbx-input');
+const fbxStatus=document.getElementById('fbx-status');
+const btnFbxPlay=document.getElementById('btn-fbx-play');
+
+async function handleFBXFile(file){
+  if(!file.name.toLowerCase().endsWith('.fbx')){
+    fbxStatus.className='fbx-status err';
+    fbxStatus.textContent='❌ Fichier .fbx requis';
+    return;
+  }
+  fbxStatus.className='fbx-status';
+  fbxStatus.textContent='⏳ Parsing FBX…';
+  try{
+    const anim=await processFBX(file);
+    S.importedAnim=anim;
+    fbxStatus.className='fbx-status ok';
+    fbxStatus.textContent=`✅ ${anim.name} — ${anim.duration.toFixed(1)}s · ${anim.frameCount} frames · ${Object.keys(anim.frames[0]||{}).length} os`;
+    btnFbxPlay.style.display='';
+    // Auto-switch to imported anim
+    document.querySelectorAll('.anim-btn').forEach(b=>b.classList.remove('active'));
+    btnFbxPlay.classList.add('active');
+    S.anim='imported';S.animT=0;
+  }catch(err){
+    fbxStatus.className='fbx-status err';
+    fbxStatus.textContent='❌ '+err.message;
+    console.error(err);
+  }
+}
+
+fbxZone.addEventListener('click',()=>fbxInput.click());
+fbxInput.addEventListener('change',e=>{ if(e.target.files[0]) handleFBXFile(e.target.files[0]); });
+fbxZone.addEventListener('dragover',e=>{e.preventDefault();fbxZone.classList.add('drag-over');});
+fbxZone.addEventListener('dragleave',()=>fbxZone.classList.remove('drag-over'));
+fbxZone.addEventListener('drop',e=>{
+  e.preventDefault();fbxZone.classList.remove('drag-over');
+  if(e.dataTransfer.files[0]) handleFBXFile(e.dataTransfer.files[0]);
+});
+
+// ═══════════════════════════════════════════════════════
+// FACE GRID
+// ═══════════════════════════════════════════════════════
+function buildFaceGrid(){
+  const g=document.getElementById('face-grid');g.innerHTML='';
+  for(let r=0;r<10;r++)for(let c=0;c<10;c++){
+    const px=document.createElement('div');
+    px.className='px';px.dataset.r=r;px.dataset.c=c;
+    const col=S.faceGrid[r][c];if(col)px.style.background=col;
+    g.appendChild(px);
+  }
+}
+function paintPx(el){
+  const r=+el.dataset.r,c=+el.dataset.c;if(isNaN(r))return;
+  S.faceGrid[r][c]=S.paintColor;
+  el.style.background=S.paintColor||'var(--ct)';
+}
+const gEl=document.getElementById('face-grid');
+gEl.addEventListener('mousedown',e=>{if(e.target.classList.contains('px')){S.painting=true;paintPx(e.target);}});
+gEl.addEventListener('mousemove',e=>{if(S.painting&&e.target.classList.contains('px'))paintPx(e.target);});
+window.addEventListener('mouseup',()=>S.painting=false);
+gEl.addEventListener('touchstart',e=>{e.preventDefault();S.painting=true;},{passive:false});
+gEl.addEventListener('touchmove',e=>{
+  e.preventDefault();const t=e.touches[0];
+  const el=document.elementFromPoint(t.clientX,t.clientY);
+  if(el?.classList.contains('px'))paintPx(el);
+},{passive:false});
+gEl.addEventListener('touchend',()=>S.painting=false);
+document.getElementById('btn-clear').addEventListener('click',()=>{
+  S.faceGrid=Array.from({length:10},()=>Array(10).fill(null));
+  buildFaceGrid();
+});
+
+// ═══════════════════════════════════════════════════════
+// PALETTE
+// ═══════════════════════════════════════════════════════
+function buildPalette(){
+  const p=document.getElementById('palette');p.innerHTML='';
+  FACE_PAL.forEach(col=>{
+    const el=document.createElement('div');
+    el.className='pc'+(col===null?' eraser':'');
+    el.style.background=col||'';
+    if(col===null)el.textContent='✕';
+    if(col===S.paintColor)el.classList.add('sel');
+    el.addEventListener('click',()=>{
+      S.paintColor=col;
+      p.querySelectorAll('.pc').forEach(e=>e.classList.remove('sel'));
+      el.classList.add('sel');
+    });
+    p.appendChild(el);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// COLOR CHIPS
+// ═══════════════════════════════════════════════════════
+function buildChips(id,cols,getVal,setVal){
+  const c=document.getElementById(id);c.innerHTML='';
+  cols.forEach(col=>{
+    const el=document.createElement('div');
+    el.className='chip'+(col===getVal()?' sel':'');
+    el.style.background=col;
+    el.addEventListener('click',()=>{setVal(col);buildChips(id,cols,getVal,setVal);});
+    c.appendChild(el);
+  });
+}
+
+// ═══════════════════════════════════════════════════════
+// INPUTS
+// ═══════════════════════════════════════════════════════
+document.getElementById('inp-name').addEventListener('input',e=>S.name=e.target.value);
+document.getElementById('inp-num').addEventListener('input',e=>{
+  S.num=String(Math.min(99,Math.max(1,parseInt(e.target.value)||1)));
+});
+
+// ═══════════════════════════════════════════════════════
+// DEFAULT FACE
+// ═══════════════════════════════════════════════════════
+S.faceGrid[2][3]='#2c1a0e';S.faceGrid[2][6]='#2c1a0e';
+S.faceGrid[4][3]='#0a0a0a';S.faceGrid[4][6]='#0a0a0a';
+S.faceGrid[7][3]='#e06060';S.faceGrid[7][4]='#e06060';
+S.faceGrid[7][5]='#e06060';S.faceGrid[7][6]='#e06060';
+
+// ═══════════════════════════════════════════════════════
+// INIT
+// ═══════════════════════════════════════════════════════
+resize();
+new ResizeObserver(resize).observe(canvas.parentElement);
+buildFaceGrid();buildPalette();
+buildChips('skin-chips',SKIN_COLS,()=>S.skinColor,v=>{S.skinColor=v;});
+buildChips('jersey-chips',JERSEY_COLS,()=>S.jerseyColor,v=>{S.jerseyColor=v;});
+loop();
+</script>
+</body>
+</html>
