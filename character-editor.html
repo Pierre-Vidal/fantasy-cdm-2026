@@ -40,6 +40,9 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
 #palette{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
 .pc{aspect-ratio:1;border-radius:4px;cursor:pointer;border:1.5px solid transparent;transition:transform .1s,border-color .1s;display:flex;align-items:center;justify-content:center;font-size:.6rem}
 .pc:hover{transform:scale(1.12)}.pc.sel{border-color:var(--ac)}
+.manual-overlay{position:absolute;inset:0;display:none;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:24px;pointer-events:none;z-index:5}
+.manual-overlay.on{display:flex}
+.manual-hint{background:rgba(8,9,13,.82);border:1px solid var(--ac);border-radius:8px;color:var(--ac);font-family:'Courier New',monospace;font-size:.58rem;letter-spacing:.1em;padding:6px 14px;text-align:center;line-height:1.5}
 .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
 .placeholder-icon{font-size:2.5rem;opacity:.18}
 .placeholder-txt{font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--mu);text-align:center;line-height:1.7}
@@ -56,6 +59,9 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
   <div class="left">
     <div class="canvas-wrap">
       <canvas id="c"></canvas>
+      <div class="manual-overlay" id="manual-overlay">
+        <div class="manual-hint" id="manual-hint">Cliquez sur le centre du carré blanc de votre modèle</div>
+      </div>
       <div class="placeholder" id="placeholder">
         <div class="placeholder-icon">&#x1F916;</div>
         <div class="placeholder-txt">Déposez votre modèle<br>riggé FBX ci-dessous</div>
@@ -96,15 +102,20 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
     <div class="ctrl">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div class="lbl" style="margin:0">Visage 12&times;12</div>
-        <button class="btn-sm" id="btn-clear">Effacer</button>
+        <div style="display:flex;gap:5px">
+          <button class="btn-sm" id="btn-place-face" style="display:none">&#x1F4CD; Placer</button>
+          <button class="btn-sm" id="btn-clear">Effacer</button>
+        </div>
       </div>
       <div id="face-grid"></div>
       <div id="palette"></div>
     </div>
     <div class="sep"></div>
-    <div style="font-family:'Courier New',monospace;font-size:.55rem;color:var(--mu);line-height:1.7">
+    <div id="face-info" style="font-family:'Courier New',monospace;font-size:.55rem;color:var(--mu);line-height:1.7">
       &#x2139; Le carré blanc 12×12 de votre modèle<br>
-      est automatiquement détecté comme zone de visage.
+      est automatiquement détecté comme zone de<br>
+      visage. Si la détection échoue, utilisez<br>
+      le bouton <strong style="color:var(--tx)">Placer</strong> ci-dessus.
     </div>
   </div>
 </div>
@@ -178,6 +189,8 @@ var faceCanvas = null;     // HTMLCanvasElement (12x12)
 var faceMesh = null;       // THREE.Mesh (plane over face)
 var cameraTarget = {x:0, y:0, z:0};
 var camDist = 300;
+var faceEstSize = 25;      // estimated face size in world units (from auto-detection)
+var manualMode = false;    // manual face placement mode active
 
 var canvas = document.getElementById('c');
 var placeholder = document.getElementById('placeholder');
@@ -389,6 +402,9 @@ function setupModel(obj) {
 
   scene.add(obj);
   modelObj = obj;
+
+  // Show manual placement button now that a model is loaded
+  document.getElementById('btn-place-face').style.display = '';
 
   cameraTarget = { x: 0, y: newSize.y * 0.42, z: 0 };
   camDist = newSize.y * 1.4; // basé sur la hauteur, pas la profondeur
@@ -612,21 +628,36 @@ function detectFaceArea(obj) {
   // 5. Remove old face mesh
   if (faceMesh) { if (faceMesh.parent) faceMesh.parent.remove(faceMesh); faceMesh = null; }
 
-  // 6. Compute bounding box (world space)
-  var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
-  var sumZ = 0;
-  faceCands.forEach(function(c) {
-    minX = Math.min(minX, c.pos.x); maxX = Math.max(maxX, c.pos.x);
-    minY = Math.min(minY, c.pos.y); maxY = Math.max(maxY, c.pos.y);
-    sumZ += c.pos.z;
-  });
-  var faceW  = maxX - minX, faceH = maxY - minY;
-  var faceCX = (minX + maxX) / 2 + domNor.x * 0.8;
-  var faceCY = (minY + maxY) / 2 + domNor.y * 0.8;
-  var faceCZ = sumZ / faceCands.length   + domNor.z * 0.8;
+  // 6. Compute face dimensions in the face plane (tangent-projected, not world X/Y which can be 0)
+  //    This handles any face orientation (e.g. domNor=-X means X range = 0, need Z×Y extents)
+  var faceNup = Math.abs(domNor.y) < 0.9 ? new THR.Vector3(0,1,0) : new THR.Vector3(1,0,0);
+  var faceTang   = faceNup.clone().cross(domNor).normalize(); // horizontal axis in face plane
+  var faceBitang = domNor.clone().cross(faceTang).normalize(); // vertical axis in face plane
 
-  dbg('Face bbox: X[' + minX.toFixed(1) + ',' + maxX.toFixed(1) + '] Y[' + minY.toFixed(1) + ',' + maxY.toFixed(1) + '] Z=' + faceCZ.toFixed(1));
-  dbg('Face size: ' + faceW.toFixed(1) + ' x ' + faceH.toFixed(1) + ', center=(' + faceCX.toFixed(1) + ',' + faceCY.toFixed(1) + ',' + faceCZ.toFixed(1) + ')');
+  var ctrPos = new THR.Vector3();
+  faceCands.forEach(function(c) { ctrPos.add(c.pos); });
+  ctrPos.divideScalar(faceCands.length);
+
+  var minT=-Infinity, maxT=Infinity, minB=-Infinity, maxB=Infinity;
+  minT = Infinity; maxT = -Infinity; minB = Infinity; maxB = -Infinity;
+  faceCands.forEach(function(c) {
+    var d = c.pos.clone().sub(ctrPos);
+    var t = d.dot(faceTang), b = d.dot(faceBitang);
+    minT = Math.min(minT, t); maxT = Math.max(maxT, t);
+    minB = Math.min(minB, b); maxB = Math.max(maxB, b);
+  });
+  var faceW = maxT - minT, faceH = maxB - minB;
+  // If one dimension is degenerate (< 2 units), assume square face
+  if (faceW < 2) faceW = Math.max(faceH, 20);
+  if (faceH < 2) faceH = Math.max(faceW, 20);
+  faceEstSize = (faceW + faceH) / 2; // store for manual placement
+
+  var faceCX = ctrPos.x + domNor.x * 0.8;
+  var faceCY = ctrPos.y + domNor.y * 0.8;
+  var faceCZ = ctrPos.z + domNor.z * 0.8;
+
+  dbg('Face plane ctr=(' + faceCX.toFixed(1) + ',' + faceCY.toFixed(1) + ',' + faceCZ.toFixed(1) + ')');
+  dbg('Face size (tang-proj): ' + faceW.toFixed(1) + ' x ' + faceH.toFixed(1) + ', estSize=' + faceEstSize.toFixed(1));
 
   // 7. Build face plane
   faceCanvas = document.createElement('canvas');
@@ -635,7 +666,7 @@ function detectFaceArea(obj) {
   faceTex.magFilter = THR.NearestFilter;
   faceTex.minFilter = THR.NearestFilter;
 
-  var faceMat = new THR.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false });
+  var faceMat = new THR.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, side: THR.DoubleSide });
   var faceGeo = new THR.PlaneGeometry(faceW, faceH);
   faceMesh = new THR.Mesh(faceGeo, faceMat);
 
@@ -758,18 +789,26 @@ document.getElementById('anim-bar').addEventListener('click', function(e) {
 // ============================================================
 // DRAG / ROTATE
 // ============================================================
+var _clickMoved = 0;
 canvas.addEventListener('mousedown', function(e) {
+  _clickMoved = 0;
   S.dragging = true; S.autoRot = false;
   S.lastX = e.clientX; S.lastY = e.clientY;
 });
 window.addEventListener('mousemove', function(e) {
   if (!S.dragging) return;
-  S.vRotY += (e.clientX - S.lastX) * 0.013;
-  S.vRotX += (e.clientY - S.lastY) * 0.013;
+  var dx = e.clientX - S.lastX, dy = e.clientY - S.lastY;
+  _clickMoved += Math.abs(dx) + Math.abs(dy);
+  S.vRotY += dx * 0.013;
+  S.vRotX += dy * 0.013;
   S.vRotX = Math.max(-1.2, Math.min(1.2, S.vRotX));
   S.lastX = e.clientX; S.lastY = e.clientY;
 });
-window.addEventListener('mouseup', function() { S.dragging = false; });
+window.addEventListener('mouseup', function(e) {
+  var wasDragging = S.dragging;
+  S.dragging = false;
+  if (wasDragging && _clickMoved < 5 && manualMode) handleManualClick(e);
+});
 canvas.addEventListener('dblclick', function() { S.autoRot = true; });
 
 canvas.addEventListener('touchstart', function(e) {
@@ -783,7 +822,114 @@ canvas.addEventListener('touchmove', function(e) {
   S.vRotX = Math.max(-1.2, Math.min(1.2, S.vRotX));
   S.lastX = e.touches[0].clientX; S.lastY = e.touches[0].clientY;
 }, { passive: false });
-canvas.addEventListener('touchend', function() { S.dragging = false; });
+canvas.addEventListener('touchend', function(e) {
+  var wasDragging = S.dragging;
+  S.dragging = false;
+  if (wasDragging && manualMode && e.changedTouches.length) {
+    handleManualClick({ clientX: e.changedTouches[0].clientX, clientY: e.changedTouches[0].clientY });
+  }
+});
+
+// ============================================================
+// MANUAL FACE PLACEMENT
+// ============================================================
+function setManualMode(on) {
+  manualMode = on;
+  var overlay = document.getElementById('manual-overlay');
+  var btn = document.getElementById('btn-place-face');
+  if (on) {
+    overlay.classList.add('on');
+    btn.textContent = '✕ Annuler';
+    S.autoRot = false;
+    dbg('Mode placement manuel activé — cliquez sur le visage du modèle');
+  } else {
+    overlay.classList.remove('on');
+    btn.textContent = 'ὌD Placer';
+    btn.textContent = '📍 Placer';
+  }
+}
+
+function handleManualClick(e) {
+  if (!modelObj || !THR || !renderer || !camera) return;
+  var rect = canvas.getBoundingClientRect();
+  var ndcX = ((e.clientX - rect.left) / rect.width)  * 2 - 1;
+  var ndcY = -((e.clientY - rect.top)  / rect.height) * 2 + 1;
+
+  var raycaster = new THR.Raycaster();
+  raycaster.setFromCamera(new THR.Vector2(ndcX, ndcY), camera);
+  var hits = raycaster.intersectObjects([modelObj], true);
+  if (!hits.length) { dbg('Clic manuel: aucune surface touchée — essayez à nouveau'); return; }
+
+  var hit = hits[0];
+  var worldPoint = hit.point.clone();
+  var worldNormal = hit.face
+    ? hit.face.normal.clone().transformDirection(hit.object.matrixWorld).normalize()
+    : new THR.Vector3(0, 0, 1);
+
+  dbg('Clic manuel: point=' + worldPoint.x.toFixed(1) + ',' + worldPoint.y.toFixed(1) + ',' + worldPoint.z.toFixed(1)
+    + ' normal=' + worldNormal.x.toFixed(2) + ',' + worldNormal.y.toFixed(2) + ',' + worldNormal.z.toFixed(2));
+
+  placeFaceManual(worldPoint, worldNormal, faceEstSize, faceEstSize);
+  setManualMode(false);
+  document.getElementById('face-info').innerHTML =
+    '<span style="color:var(--ac)">&#x2713; Visage placé manuellement.</span><br>' +
+    'Cliquez à nouveau sur <strong style="color:var(--tx)">Placer</strong> pour repositionner.';
+}
+
+function placeFaceManual(center, nor, fw, fh) {
+  dbg('placeFaceManual: size=' + fw.toFixed(1) + 'x' + fh.toFixed(1));
+  if (faceMesh) { if (faceMesh.parent) faceMesh.parent.remove(faceMesh); faceMesh = null; }
+
+  faceCanvas = document.createElement('canvas');
+  faceCanvas.width = FACE_COLS; faceCanvas.height = FACE_ROWS;
+  faceTex = new THR.CanvasTexture(faceCanvas);
+  faceTex.magFilter = THR.NearestFilter;
+  faceTex.minFilter = THR.NearestFilter;
+
+  var mat = new THR.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, side: THR.DoubleSide });
+  var geo = new THR.PlaneGeometry(fw, fh);
+  faceMesh = new THR.Mesh(geo, mat);
+
+  // Orient plane: default +Z normal → rotate to face worldNormal
+  var worldQuat = new THR.Quaternion().setFromUnitVectors(new THR.Vector3(0,0,1), nor);
+
+  // Push slightly outward to avoid z-fighting
+  var placePt = center.clone().addScaledVector(nor, 1.0);
+
+  // Parent to head bone so face follows animation
+  var headBone = null;
+  var headNames = ['mixamorigHead','Head','head','mixamorig:Head'];
+  if (modelObj) {
+    modelObj.traverse(function(n) {
+      if (!headBone && headNames.indexOf(n.name) !== -1) headBone = n;
+    });
+  }
+
+  if (headBone) {
+    headBone.updateMatrixWorld(true);
+    var invHead = headBone.matrixWorld.clone().invert();
+    var localPos = placePt.clone().applyMatrix4(invHead);
+    var boneQ = new THR.Quaternion();
+    headBone.getWorldQuaternion(boneQ);
+    var localQ = boneQ.clone().invert().multiply(worldQuat);
+    faceMesh.position.copy(localPos);
+    faceMesh.quaternion.copy(localQ);
+    headBone.add(faceMesh);
+    dbg('placeFaceManual: parented to head bone ✓');
+  } else {
+    faceMesh.position.copy(placePt);
+    faceMesh.quaternion.copy(worldQuat);
+    scene.add(faceMesh);
+    dbg('placeFaceManual: world space (no head bone found)');
+  }
+
+  drawFaceTex();
+}
+
+document.getElementById('btn-place-face').addEventListener('click', function() {
+  if (!modelObj) { dbg('Chargez d\'abord un modèle FBX'); return; }
+  setManualMode(!manualMode);
+});
 
 // ============================================================
 // FBX DROP ZONES
