@@ -390,13 +390,25 @@ function setupModel(obj) {
   scene.add(obj);
   modelObj = obj;
 
-  cameraTarget = { x: 0, y: newSize.y * 0.4, z: 0 };
-  camDist = Math.max(newSize.x, newSize.z) * 3.5 + newSize.y;
+  cameraTarget = { x: 0, y: newSize.y * 0.42, z: 0 };
+  camDist = newSize.y * 1.4; // basé sur la hauteur, pas la profondeur
+  dbg('camDist: ' + camDist.toFixed(1) + ' (hauteur=' + newSize.y.toFixed(1) + ')');
   S.vRotX = -0.08;
   S.vRotY = 0.35;
 
-  detectFaceArea(obj);
   mixer = new THR.AnimationMixer(obj);
+
+  // Essai immédiat (si les textures sont deja dispo)
+  detectFaceArea(obj);
+
+  // Retry quand toutes les textures async sont chargées
+  THR.DefaultLoadingManager.onLoad = function() {
+    dbg('DefaultLoadingManager.onLoad → retry face detection');
+    if (modelObj) detectFaceArea(modelObj);
+  };
+  // Fallback : retry à 1s et 3s
+  setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 1000);
+  setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 3000);
 }
 
 // ============================================================
@@ -436,9 +448,14 @@ function detectFaceArea(obj) {
       var mats = Array.isArray(node.material) ? node.material : [node.material];
       for (var mi = 0; mi < mats.length; mi++) {
         var mat = mats[mi];
-        if (!mat || !mat.map || !mat.map.image) continue;
-        var img = mat.map.image;
-        dbg('  UV scan "' + node.name + '": palette ' + img.width + 'x' + img.height);
+        if (!mat || !mat.map) continue;
+        var texMap = mat.map;
+        // Log texture state
+        var imgRef = texMap.image;
+        dbg('  texture state: image=' + (imgRef ? (imgRef.width+'x'+imgRef.height + (imgRef.complete===false?' (loading)':' (ready)')) : 'NULL') +
+            ' source=' + (texMap.source ? (texMap.source.data ? typeof texMap.source.data : 'no data') : 'no source'));
+        if (!imgRef) continue;
+        var img = imgRef;
         var pc = document.createElement('canvas');
         pc.width = img.width; pc.height = img.height;
         pc.getContext('2d').drawImage(img, 0, 0);
@@ -478,6 +495,13 @@ function detectFaceArea(obj) {
   if (!candidates.length) {
     dbg('WARN: aucune zone blanche détectée — visage non créé');
     return;
+  }
+
+  // Si le face plane existe déjà, on le supprime avant d'en recréer un
+  if (faceMesh) {
+    if (faceMesh.parent) faceMesh.parent.remove(faceMesh);
+    faceMesh = null;
+    dbg('Face plane existant supprimé pour recréation');
   }
 
   // Compute bounding box of white region
