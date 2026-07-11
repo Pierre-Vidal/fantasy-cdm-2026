@@ -43,6 +43,10 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
 .placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
 .placeholder-icon{font-size:2.5rem;opacity:.18}
 .placeholder-txt{font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--mu);text-align:center;line-height:1.7}
+.dbg-toggle{background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-family:'Courier New',monospace;font-size:.5rem;letter-spacing:.08em;text-transform:uppercase;padding:3px 8px;cursor:pointer;margin:2px 10px 0;align-self:flex-start}
+.dbg-toggle:hover{border-color:var(--ac);color:var(--ac)}
+.dbg-panel{display:none;background:#000c;border:1px solid #3ddc8455;border-radius:6px;font-family:'Courier New',monospace;font-size:.5rem;color:#5fffaa;padding:6px 8px;margin:0 10px 4px;max-height:180px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5}
+.dbg-panel.open{display:block}
 @media(max-width:600px){.editor{grid-template-columns:1fr}.right{border-left:none;border-top:1px solid var(--bd)}.left{height:420px}}
 </style>
 </head>
@@ -76,6 +80,8 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
       <div class="fbx-st" id="model-status"></div>
       <div class="fbx-st" id="anim-status"></div>
     </div>
+    <button class="dbg-toggle" onclick="document.getElementById('dbg-panel').classList.toggle('open')">&#x1F50D; Logs debug</button>
+    <div class="dbg-panel" id="dbg-panel"></div>
     <input type="file" id="model-input" accept=".fbx" style="display:none">
     <input type="file" id="anim-input" accept=".fbx" style="display:none">
   </div>
@@ -144,6 +150,17 @@ var FACE_PAL = [
   '#d4a017','#e06060','#7a3b1e','#f0e6c0',
   '#2c1a0e','#0a0a0a', null,
 ];
+
+// ============================================================
+// DEBUG LOGGER
+// ============================================================
+var _dbgLines = [];
+function dbg(msg) {
+  var ts = new Date().toLocaleTimeString('fr-FR',{hour:'2-digit',minute:'2-digit',second:'2-digit'});
+  _dbgLines.push('[' + ts + '] ' + msg);
+  var panel = document.getElementById('dbg-panel');
+  if (panel) { panel.textContent = _dbgLines.join('\n'); panel.scrollTop = panel.scrollHeight; }
+}
 
 // ============================================================
 // THREE.JS STATE
@@ -310,13 +327,56 @@ function setupModel(obj) {
   if (faceMesh) { if (faceMesh.parent) faceMesh.parent.remove(faceMesh); faceMesh = null; }
   modelObj = null; mixer = null; animAction = null;
 
-  // Normalize scale and center
+  dbg('=== SETUP MODEL ===');
+
+  // Log all bones
+  var boneNames = [];
+  obj.traverse(function(node) { if (node.isBone || node.type === 'Bone') boneNames.push(node.name); });
+  dbg('Bones (' + boneNames.length + '): ' + boneNames.slice(0, 20).join(', ') + (boneNames.length > 20 ? '…' : ''));
+
+  // Log meshes
+  var meshCount = 0;
+  obj.traverse(function(node) {
+    if (!node.isSkinnedMesh && !node.isMesh) return;
+    meshCount++;
+    var geo = node.geometry;
+    var attrs = geo ? Object.keys(geo.attributes).join(', ') : 'N/A';
+    dbg('Mesh[' + meshCount + '] "' + node.name + '": attrs=[' + attrs + ']');
+
+    if (geo && geo.attributes.color) {
+      var col = geo.attributes.color;
+      dbg('  → color attr: count=' + col.count + ', itemSize=' + col.itemSize);
+      // Sample first 5 vertices
+      var samples = [];
+      for (var i = 0; i < Math.min(5, col.count); i++) {
+        samples.push('(' + col.getX(i).toFixed(2) + ',' + col.getY(i).toFixed(2) + ',' + col.getZ(i).toFixed(2) + ')');
+      }
+      dbg('  → sample colors: ' + samples.join(' '));
+      // Find max brightness
+      var maxBright = 0;
+      for (var i = 0; i < col.count; i++) {
+        var b = (col.getX(i) + col.getY(i) + col.getZ(i)) / 3;
+        if (b > maxBright) maxBright = b;
+      }
+      dbg('  → max brightness: ' + maxBright.toFixed(3));
+    }
+
+    if (geo && geo.attributes.uv) {
+      var mat = Array.isArray(node.material) ? node.material[0] : node.material;
+      dbg('  → has UV, material.map: ' + (mat && mat.map ? 'YES (img ' + (mat.map.image ? mat.map.image.width + 'x' + mat.map.image.height : 'no image') + ')' : 'NO'));
+    }
+  });
+  dbg('Total meshes: ' + meshCount);
+
+  // Bounding box BEFORE normalization
   var box = new THR.Box3().setFromObject(obj);
   var size = box.getSize(new THR.Vector3());
-  var center = box.getCenter(new THR.Vector3());
+  dbg('BBox raw: ' + size.x.toFixed(1) + ' x ' + size.y.toFixed(1) + ' x ' + size.z.toFixed(1));
+
   var maxDim = Math.max(size.x, size.y, size.z);
   if (maxDim < 0.0001) maxDim = 1;
-  var normScale = 160 / maxDim; // normalize to 160 units tall
+  var normScale = 160 / maxDim;
+  dbg('normScale: ' + normScale.toFixed(4));
   obj.scale.setScalar(normScale);
 
   // Recompute box after scale
@@ -324,21 +384,18 @@ function setupModel(obj) {
   var newCenter = box.getCenter(new THR.Vector3());
   var newSize = box.getSize(new THR.Vector3());
   obj.position.sub(newCenter);
-  obj.position.y += newSize.y * 0.5; // feet at y=0
+  obj.position.y += newSize.y * 0.5;
+  dbg('BBox normalized: ' + newSize.x.toFixed(1) + ' x ' + newSize.y.toFixed(1) + ' x ' + newSize.z.toFixed(1));
 
   scene.add(obj);
   modelObj = obj;
 
-  // Camera target = model center
   cameraTarget = { x: 0, y: newSize.y * 0.4, z: 0 };
   camDist = Math.max(newSize.x, newSize.z) * 3.5 + newSize.y;
   S.vRotX = -0.08;
   S.vRotY = 0.35;
 
-  // Detect white face area
   detectFaceArea(obj);
-
-  // Setup AnimationMixer (will be used when animation FBX is loaded)
   mixer = new THR.AnimationMixer(obj);
 }
 
@@ -346,7 +403,8 @@ function setupModel(obj) {
 // FACE AREA DETECTION
 // ============================================================
 function detectFaceArea(obj) {
-  var candidates = []; // {pos: Vector3, meshScale}
+  dbg('=== DETECT FACE ===');
+  var candidates = [];
 
   obj.traverse(function(node) {
     if (!node.isSkinnedMesh && !node.isMesh) return;
@@ -355,18 +413,22 @@ function detectFaceArea(obj) {
     var positions = geo.attributes.position;
     if (!positions) return;
 
-    // Try vertex colors first
+    node.updateMatrixWorld(true);
+
+    // Try vertex colors — threshold 0.75 to be generous
     if (geo.attributes.color) {
       var colors = geo.attributes.color;
+      var found = 0;
       for (var i = 0; i < colors.count; i++) {
         var r = colors.getX(i), g = colors.getY(i), b = colors.getZ(i);
-        if (r > 0.82 && g > 0.82 && b > 0.82) {
-          // World position of this vertex
+        if (r > 0.75 && g > 0.75 && b > 0.75) {
           var lp = new THR.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
           lp.applyMatrix4(node.matrixWorld);
           candidates.push(lp);
+          found++;
         }
       }
+      dbg('  vertexColor scan "' + node.name + '": ' + found + ' white verts (thresh 0.75)');
     }
 
     // Try UV + palette texture
@@ -376,29 +438,45 @@ function detectFaceArea(obj) {
         var mat = mats[mi];
         if (!mat || !mat.map || !mat.map.image) continue;
         var img = mat.map.image;
+        dbg('  UV scan "' + node.name + '": palette ' + img.width + 'x' + img.height);
         var pc = document.createElement('canvas');
         pc.width = img.width; pc.height = img.height;
         pc.getContext('2d').drawImage(img, 0, 0);
         var pd = pc.getContext('2d').getImageData(0, 0, img.width, img.height).data;
+
+        // Log all unique palette entries
+        var palEntries = {};
+        for (var pp = 0; pp < pd.length; pp += 4) {
+          var key = pd[pp] + ',' + pd[pp+1] + ',' + pd[pp+2];
+          palEntries[key] = (palEntries[key]||0)+1;
+        }
+        var palKeys = Object.keys(palEntries).sort(function(a,b){ return palEntries[b]-palEntries[a]; });
+        dbg('  Top palette entries: ' + palKeys.slice(0,8).map(function(k){ return 'rgb('+k+')×'+palEntries[k]; }).join(' | '));
+
         var uvs = geo.attributes.uv;
+        var found = 0;
         for (var vi = 0; vi < uvs.count; vi++) {
           var u = uvs.getX(vi), v = uvs.getY(vi);
           var px = Math.min(img.width - 1, Math.max(0, Math.round(u * img.width)));
           var py = Math.min(img.height - 1, Math.max(0, Math.round((1 - v) * img.height)));
           var pidx = (py * img.width + px) * 4;
           var pr = pd[pidx]/255, pg = pd[pidx+1]/255, pb = pd[pidx+2]/255;
-          if (pr > 0.82 && pg > 0.82 && pb > 0.82) {
+          if (pr > 0.75 && pg > 0.75 && pb > 0.75) {
             var lp2 = new THR.Vector3(positions.getX(vi), positions.getY(vi), positions.getZ(vi));
             lp2.applyMatrix4(node.matrixWorld);
             candidates.push(lp2);
+            found++;
           }
         }
+        dbg('  UV white verts found: ' + found + ' (thresh 0.75)');
       }
     }
   });
 
+  dbg('Total white candidates: ' + candidates.length);
+
   if (!candidates.length) {
-    console.warn('Aucune zone blanche detectee sur le modele.');
+    dbg('WARN: aucune zone blanche détectée — visage non créé');
     return;
   }
 
@@ -415,6 +493,9 @@ function detectFaceArea(obj) {
   var faceCY = (minY + maxY) * 0.5;
   var faceCZ = sumZ / candidates.length + 0.5; // slightly in front
 
+  dbg('Face bbox: X[' + minX.toFixed(1) + ',' + maxX.toFixed(1) + '] Y[' + minY.toFixed(1) + ',' + maxY.toFixed(1) + '] Z_avg=' + (sumZ/candidates.length).toFixed(1));
+  dbg('Face size: ' + faceW.toFixed(1) + ' x ' + faceH.toFixed(1) + ', center=(' + faceCX.toFixed(1) + ',' + faceCY.toFixed(1) + ',' + faceCZ.toFixed(1) + ')');
+
   // Find head bone to parent the face plane to
   var headBone = null;
   var headNames = ['mixamorigHead','Head','head','mixamorig:Head'];
@@ -423,6 +504,7 @@ function detectFaceArea(obj) {
       if (!headBone && headNames.indexOf(node.name) !== -1) headBone = node;
     });
   }
+  dbg('Head bone: ' + (headBone ? headBone.name : 'NOT FOUND'));
 
   // Create face canvas texture (12x12 px)
   faceCanvas = document.createElement('canvas');
@@ -440,20 +522,21 @@ function detectFaceArea(obj) {
   faceMesh = new THR.Mesh(faceGeo, faceMat);
 
   if (headBone) {
-    // Convert face world position to head bone local space
-    var headWorldInv = new THR.Matrix4();
     headBone.updateMatrixWorld(true);
-    headWorldInv.copy(headBone.matrixWorld).invert();
+    var headWorldInv = headBone.matrixWorld.clone().invert();
     var localPos = new THR.Vector3(faceCX, faceCY, faceCZ).applyMatrix4(headWorldInv);
+    dbg('Face local pos in head bone: (' + localPos.x.toFixed(1) + ',' + localPos.y.toFixed(1) + ',' + localPos.z.toFixed(1) + ')');
     faceMesh.position.copy(localPos);
     headBone.add(faceMesh);
+    dbg('Face plane parented to head bone ✓');
   } else {
-    // No head bone found — place in world space
     faceMesh.position.set(faceCX, faceCY, faceCZ);
     scene.add(faceMesh);
+    dbg('Face plane placed in world space (no head bone found)');
   }
 
   drawFaceTex();
+  dbg('=== DONE ===');
 }
 
 // ============================================================
