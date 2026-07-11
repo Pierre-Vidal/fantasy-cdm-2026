@@ -716,14 +716,12 @@ function detectFaceArea(obj) {
     var faceGeo = new THR.PlaneGeometry(localW, localH);
     faceMesh = new THR.Mesh(faceGeo, faceMat);
 
-    var headWorldInv = headBone.matrixWorld.clone().invert();
-    var localPos = new THR.Vector3(faceCX, faceCY, faceCZ).applyMatrix4(headWorldInv);
-    var boneWorldQuat = new THR.Quaternion();
-    headBone.getWorldQuaternion(boneWorldQuat);
-    faceMesh.quaternion.copy(boneWorldQuat.clone().invert().multiply(worldPlaneQuat));
-    faceMesh.position.copy(localPos);
+    // Hardcoded placement confirmed manually: front face of robot head square
+    faceMesh.position.set(-0.0090, 0.7328, 0.6075);
+    faceMesh.quaternion.set(0, 0, 0, 1); // identity = face-forward with head bone
+    faceMesh.scale.set(1.05, 1.05, 1);
     headBone.add(faceMesh);
-    dbg('Face local pos=(' + localPos.x.toFixed(2) + ',' + localPos.y.toFixed(2) + ',' + localPos.z.toFixed(2) + ') → head bone ✓');
+    dbg('Face local pos=(hardcoded -0.009,0.733,0.608) → head bone ✓');
   } else {
     var faceGeo = new THR.PlaneGeometry(faceW, faceH);
     faceMesh = new THR.Mesh(faceGeo, faceMat);
@@ -733,7 +731,7 @@ function detectFaceArea(obj) {
     dbg('Face plane in world space (no head bone)');
   }
 
-  showFaceSizeCtrl();
+  showFaceSizeCtrl(1.05);
   drawFaceTex();
   dbg('=== DONE ===');
 }
@@ -986,14 +984,16 @@ document.getElementById('btn-place-face').addEventListener('click', function() {
   setManualMode(!manualMode);
 });
 
-function showFaceSizeCtrl() {
+function showFaceSizeCtrl(initScale) {
+  var s    = initScale || 1;
+  var pct  = Math.round(s * 100);
   var ctrl = document.getElementById('face-size-ctrl');
   var sl   = document.getElementById('face-size');
   var val  = document.getElementById('face-size-val');
   ctrl.style.display = '';
-  sl.value = 100;
-  val.textContent = '100%';
-  if (faceMesh) faceMesh.scale.set(1, 1, 1);
+  sl.value = pct;
+  val.textContent = pct + '%';
+  if (faceMesh && !initScale) faceMesh.scale.set(s, s, 1);
 
   // Reset offset controls
   document.getElementById('face-pos-ctrl').style.display = '';
