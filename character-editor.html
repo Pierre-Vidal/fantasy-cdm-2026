@@ -112,7 +112,7 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
       <div id="face-size-ctrl" style="display:none;margin-top:8px">
         <div style="display:flex;align-items:center;gap:8px">
           <span class="lbl" style="margin:0;flex-shrink:0">Taille</span>
-          <input type="range" id="face-size" min="10" max="400" value="100" step="5"
+          <input type="range" id="face-size" min="10" max="2000" value="100" step="10"
                  style="flex:1;accent-color:var(--ac);cursor:pointer">
           <span id="face-size-val" style="font-family:'Courier New',monospace;font-size:.68rem;min-width:3.2em;text-align:right;color:var(--tx)">100%</span>
         </div>
@@ -665,7 +665,7 @@ function detectFaceArea(obj) {
   var faceCZ = ctrPos.z + domNor.z * 0.8;
 
   dbg('Face plane ctr=(' + faceCX.toFixed(1) + ',' + faceCY.toFixed(1) + ',' + faceCZ.toFixed(1) + ')');
-  dbg('Face size (tang-proj): ' + faceW.toFixed(1) + ' x ' + faceH.toFixed(1) + ', estSize=' + faceEstSize.toFixed(1));
+  dbg('Face size (tang-proj): ' + faceW.toFixed(1) + ' x ' + faceH.toFixed(1));
 
   // 7. Build face plane
   faceCanvas = document.createElement('canvas');
@@ -685,7 +685,7 @@ function detectFaceArea(obj) {
     var localW = faceW / (headWS.x || 1);
     var localH = faceH / (headWS.y || 1);
     dbg('headWorldScale=' + headWS.x.toFixed(2) + ' → localGeo=' + localW.toFixed(2) + 'x' + localH.toFixed(2));
-    faceEstSize = localW; // store local-space size for slider reference
+    faceEstSize = faceW; // store WORLD-space size (not local!) so manual placement divides once
 
     var faceGeo = new THR.PlaneGeometry(localW, localH);
     faceMesh = new THR.Mesh(faceGeo, faceMat);
@@ -917,7 +917,7 @@ function placeFaceManual(center, nor, fw, fh) {
     var localW = fw / (headWS.x || 1);
     var localH = fh / (headWS.y || 1);
     faceEstSize = localW;
-    dbg('placeFaceManual: worldSize=' + fw.toFixed(1) + ' headScale=' + headWS.x.toFixed(2) + ' localGeo=' + localW.toFixed(2));
+    dbg('placeFaceManual: fw(world)=' + fw.toFixed(1) + ' ÷ headScale=' + headWS.x.toFixed(2) + ' → localGeo=' + localW.toFixed(2) + ' → worldResult=' + (localW * headWS.x).toFixed(1));
 
     var geo = new THR.PlaneGeometry(localW, localH);
     faceMesh = new THR.Mesh(geo, mat);
