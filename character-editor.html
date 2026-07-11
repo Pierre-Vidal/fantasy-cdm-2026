@@ -10,59 +10,74 @@
 body{background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:14px 10px}
 header{font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:.28em;text-transform:uppercase;color:var(--ac);margin-bottom:12px}
 .editor{display:grid;grid-template-columns:1fr 280px;width:100%;max-width:860px;background:var(--sf);border:1px solid var(--bd);border-radius:14px;overflow:hidden}
-.left{display:flex;flex-direction:column;background:radial-gradient(ellipse 70% 55% at 45% 38%,#0d1828 0%,#050609 100%);height:500px}
-#c{display:block;flex:1;cursor:grab;touch-action:none;width:100%;height:0}
+.left{display:flex;flex-direction:column;background:radial-gradient(ellipse 70% 55% at 45% 38%,#0d1828 0%,#050609 100%);height:520px}
+.canvas-wrap{position:relative;flex:1;height:0;overflow:hidden}
+#c{display:block;width:100%;height:100%;cursor:grab;touch-action:none}
 #c:active{cursor:grabbing}
 .vp-hint{font-size:.55rem;letter-spacing:.12em;text-transform:uppercase;color:var(--mu);text-align:center;padding:4px 0 2px}
-.anim-bar{display:flex;gap:5px;padding:8px 10px;background:rgba(0,0,0,.5);border-top:1px solid var(--bd);flex-wrap:wrap}
-.anim-btn{flex:1;min-width:62px;background:var(--ct);color:var(--mu);border:1px solid var(--bd);border-radius:6px;font-family:'Courier New',monospace;font-size:.56rem;letter-spacing:.08em;text-transform:uppercase;padding:6px 3px;cursor:pointer;transition:all .13s;white-space:nowrap}
+.anim-bar{display:flex;gap:5px;padding:6px 10px;background:rgba(0,0,0,.5);border-top:1px solid var(--bd);flex-wrap:wrap}
+.anim-btn{flex:1;min-width:58px;background:var(--ct);color:var(--mu);border:1px solid var(--bd);border-radius:6px;font-family:'Courier New',monospace;font-size:.54rem;letter-spacing:.07em;text-transform:uppercase;padding:5px 3px;cursor:pointer;transition:all .13s;white-space:nowrap}
 .anim-btn:hover{background:var(--c2);color:var(--tx)}
 .anim-btn.active{background:var(--ac);color:#03200d;border-color:var(--ac);font-weight:700}
-.fbx-zone{margin:8px 10px;border:1.5px dashed var(--bd);border-radius:8px;padding:11px 8px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:.65rem;color:var(--mu)}
+.fbx-zones{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:6px 10px}
+.fbx-zone{border:1.5px dashed var(--bd);border-radius:8px;padding:8px 6px;text-align:center;cursor:pointer;transition:border-color .15s;font-size:.6rem;color:var(--mu)}
 .fbx-zone:hover,.fbx-zone.drag-over{border-color:var(--ac);color:var(--ac)}
-.fbx-status{margin:3px 10px 8px;font-family:'Courier New',monospace;font-size:.6rem;color:var(--mu);text-align:center;min-height:1.2em}
-.fbx-status.ok{color:var(--ac)}.fbx-status.err{color:#ff6b6b}
+.fbx-zone.loaded{border-color:var(--ac);border-style:solid}
+.fbx-row{display:flex;gap:6px;padding:0 10px 6px;font-family:'Courier New',monospace;font-size:.58rem;min-height:1.4em}
+.fbx-st{flex:1;text-align:center;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+.fbx-st.ok{color:var(--ac)}.fbx-st.err{color:#ff6b6b}.fbx-st.loading{color:#f0b429}
 .right{border-left:1px solid var(--bd);padding:14px 12px;display:flex;flex-direction:column;gap:12px;overflow-y:auto}
 .lbl{font-family:'Courier New',monospace;font-size:.56rem;letter-spacing:.18em;text-transform:uppercase;color:var(--mu);margin-bottom:4px}
 .ctrl{display:flex;flex-direction:column}
 input[type=text],input[type=number]{background:var(--ct);border:1px solid var(--bd);border-radius:6px;color:var(--tx);font-family:'Courier New',monospace;padding:6px 10px;outline:none;transition:border-color .13s;width:100%;font-size:.88rem}
 input[type=text]:focus,input[type=number]:focus{border-color:var(--ac)}
 input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
-.chips{display:flex;gap:6px;flex-wrap:wrap}
-.chip{width:22px;height:22px;border-radius:50%;border:2px solid transparent;cursor:pointer;transition:transform .12s,border-color .12s}
-.chip:hover{transform:scale(1.18)}.chip.sel{border-color:var(--ac)}
-#face-grid{display:grid;grid-template-columns:repeat(10,1fr);gap:1.5px;background:var(--bd);border:1.5px solid var(--bd);border-radius:5px;overflow:hidden;cursor:crosshair;user-select:none}
+.sep{height:1px;background:var(--bd)}
+.btn-sm{background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-family:'Courier New',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:5px 8px;cursor:pointer;transition:all .13s}
+.btn-sm:hover{border-color:var(--ac);color:var(--ac)}
+#face-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;background:var(--bd);border:1.5px solid var(--bd);border-radius:5px;overflow:hidden;cursor:crosshair;user-select:none}
 .px{aspect-ratio:1;background:var(--ct)}.px:hover{filter:brightness(1.5)}
 #palette{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
 .pc{aspect-ratio:1;border-radius:4px;cursor:pointer;border:1.5px solid transparent;transition:transform .1s,border-color .1s;display:flex;align-items:center;justify-content:center;font-size:.6rem}
 .pc:hover{transform:scale(1.12)}.pc.sel{border-color:var(--ac)}
-.sep{height:1px;background:var(--bd)}
-.btn-sm{background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-family:'Courier New',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:5px 8px;cursor:pointer;transition:all .13s}
-.btn-sm:hover{border-color:var(--ac);color:var(--ac)}
-@media(max-width:600px){.editor{grid-template-columns:1fr}.right{border-left:none;border-top:1px solid var(--bd)}.left{height:380px}}
+.placeholder{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;pointer-events:none}
+.placeholder-icon{font-size:2.5rem;opacity:.18}
+.placeholder-txt{font-family:'Courier New',monospace;font-size:.6rem;letter-spacing:.15em;text-transform:uppercase;color:var(--mu);text-align:center;line-height:1.7}
+@media(max-width:600px){.editor{grid-template-columns:1fr}.right{border-left:none;border-top:1px solid var(--bd)}.left{height:420px}}
 </style>
 </head>
 <body>
-<header>&#x2B1B; Character Editor &mdash; 14 bones + FBX Mixamo import</header>
+<header>&#x2B1B; Character Editor &mdash; FBX Voxel + Visage 12&times;12</header>
 <div class="editor">
   <div class="left">
-    <canvas id="c"></canvas>
+    <div class="canvas-wrap">
+      <canvas id="c"></canvas>
+      <div class="placeholder" id="placeholder">
+        <div class="placeholder-icon">&#x1F916;</div>
+        <div class="placeholder-txt">Déposez votre modèle<br>riggé FBX ci-dessous</div>
+      </div>
+    </div>
     <div class="vp-hint">Drag to rotate &middot; Double-clic : auto-rotation</div>
-    <div class="anim-bar">
-      <button class="anim-btn active" data-anim="idle">&#129464; Idle</button>
-      <button class="anim-btn" data-anim="walk">&#128694; Marche</button>
-      <button class="anim-btn" data-anim="run">&#127939; Course</button>
-      <button class="anim-btn" data-anim="goal">&#127881; But!</button>
-      <button class="anim-btn" data-anim="tackle">&#128170; Tacle</button>
-      <button class="anim-btn" data-anim="dance">&#128378; Danse</button>
-      <button class="anim-btn" id="btn-fbx-play" data-anim="imported" style="display:none">&#128230; FBX</button>
+    <div class="anim-bar" id="anim-bar">
+      <button class="anim-btn active" data-anim="tpose">T-Pose</button>
+      <button class="anim-btn" id="btn-anim-fbx" style="display:none" data-anim="imported">&#x1F4E6; FBX</button>
     </div>
-    <div class="fbx-zone" id="fbx-zone">
-      &#128193; Deposer un <strong>.fbx</strong> Mixamo ici
-      <span style="font-size:.58rem;opacity:.6;display:block;margin-top:2px">ou cliquer pour ouvrir</span>
+    <div class="fbx-zones">
+      <div class="fbx-zone" id="model-zone">
+        &#x1F5C2; Modèle <strong>.fbx</strong><br>
+        <span style="font-size:.52rem;opacity:.65">T-pose riggé Mixamo</span>
+      </div>
+      <div class="fbx-zone" id="anim-zone">
+        &#x1F3AC; Animation <strong>.fbx</strong><br>
+        <span style="font-size:.52rem;opacity:.65">optionnel</span>
+      </div>
     </div>
-    <div class="fbx-status" id="fbx-status"></div>
-    <input type="file" id="fbx-input" accept=".fbx" style="display:none">
+    <div class="fbx-row">
+      <div class="fbx-st" id="model-status"></div>
+      <div class="fbx-st" id="anim-status"></div>
+    </div>
+    <input type="file" id="model-input" accept=".fbx" style="display:none">
+    <input type="file" id="anim-input" accept=".fbx" style="display:none">
   </div>
   <div class="right">
     <div class="ctrl"><div class="lbl">Nom du joueur</div>
@@ -72,20 +87,18 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
       <input type="number" id="inp-num" value="10" min="1" max="99">
     </div>
     <div class="sep"></div>
-    <div class="ctrl"><div class="lbl">Couleur de peau</div>
-      <div class="chips" id="skin-chips"></div>
-    </div>
-    <div class="ctrl"><div class="lbl">Maillot</div>
-      <div class="chips" id="jersey-chips"></div>
-    </div>
-    <div class="sep"></div>
     <div class="ctrl">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
-        <div class="lbl" style="margin:0">Visage 10x10</div>
+        <div class="lbl" style="margin:0">Visage 12&times;12</div>
         <button class="btn-sm" id="btn-clear">Effacer</button>
       </div>
       <div id="face-grid"></div>
       <div id="palette"></div>
+    </div>
+    <div class="sep"></div>
+    <div style="font-family:'Courier New',monospace;font-size:.55rem;color:var(--mu);line-height:1.7">
+      &#x2139; Le carré blanc 12×12 de votre modèle<br>
+      est automatiquement détecté comme zone de visage.
     </div>
   </div>
 </div>
@@ -94,650 +107,590 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
 (function(){
 'use strict';
 
-// ================================================
+// ============================================================
 // STATE
-// ================================================
+// ============================================================
 var S = {
-  vRotY:0.42, vRotX:-0.16,
-  dragging:false, lastX:0, lastY:0, autoRot:true,
-  skinColor:'#d4956a', jerseyColor:'#1a4fd6',
-  name:'Mbappe', num:'10',
-  faceGrid:null,
-  paintColor:'#2c1a0e', painting:false,
-  anim:'idle', animT:0, charYOff:0,
-  importedAnim:null,
+  vRotY: 0.35, vRotX: -0.08,
+  dragging: false, lastX: 0, lastY: 0,
+  autoRot: true,
+  name: 'Mbappe', num: '10',
+  paintColor: '#111111',
+  painting: false,
+  anim: 'tpose',
+  animT: 0,
 };
 
-// faceGrid 10x10
-S.faceGrid = [];
-for(var _ri=0;_ri<10;_ri++){
-  S.faceGrid[_ri]=[];
-  for(var _ci=0;_ci<10;_ci++) S.faceGrid[_ri][_ci]=null;
+// 12x12 face grid
+var FACE_ROWS = 12, FACE_COLS = 12;
+var faceGrid = [];
+for (var _r = 0; _r < FACE_ROWS; _r++) {
+  faceGrid[_r] = [];
+  for (var _c = 0; _c < FACE_COLS; _c++) faceGrid[_r][_c] = null;
 }
 
-var SKIN_COLS   = ['#f5c89a','#e0a87a','#c68642','#8d5524','#4a2810'];
-var JERSEY_COLS = ['#1a4fd6','#cc2222','#1a8c3c','#e07b00','#111128','#d8d8d8'];
-var FACE_PAL    = ['#f5c89a','#e0a87a','#c68642','#8d5524','#4a2810',
-                   '#2c1a0e','#0a0a0a','#d4a017','#7a3b1e','#f0e6c0',
-                   '#e06060','#ffffff',null];
+// Default face
+faceGrid[2][2] = '#111'; faceGrid[2][3] = '#111';
+faceGrid[2][8] = '#111'; faceGrid[2][9] = '#111';
+faceGrid[8][2] = '#c03'; faceGrid[8][3] = '#c03';
+faceGrid[8][4] = '#c03'; faceGrid[8][5] = '#c03';
+faceGrid[8][6] = '#c03'; faceGrid[8][7] = '#c03';
+faceGrid[8][8] = '#c03'; faceGrid[8][9] = '#c03';
 
-// ================================================
-// MATH
-// ================================================
-function add3(a,b){return{x:a.x+b.x,y:a.y+b.y,z:a.z+b.z};}
-function sub3(a,b){return{x:a.x-b.x,y:a.y-b.y,z:a.z-b.z};}
-function dot3(a,b){return a.x*b.x+a.y*b.y+a.z*b.z;}
-function norm3(v){var l=Math.sqrt(v.x*v.x+v.y*v.y+v.z*v.z)||1;return{x:v.x/l,y:v.y/l,z:v.z/l};}
-function rX(p,a){var c=Math.cos(a),s=Math.sin(a);return{x:p.x,y:p.y*c-p.z*s,z:p.y*s+p.z*c};}
-function rY(p,a){var c=Math.cos(a),s=Math.sin(a);return{x:p.x*c+p.z*s,y:p.y,z:-p.x*s+p.z*c};}
-function rZ(p,a){var c=Math.cos(a),s=Math.sin(a);return{x:p.x*c-p.y*s,y:p.x*s+p.y*c,z:p.z};}
-function applyRot(p,r){
-  var q={x:p.x,y:p.y,z:p.z};
-  if(r.x)q=rX(q,r.x);
-  if(r.y)q=rY(q,r.y);
-  if(r.z)q=rZ(q,r.z);
-  return q;
-}
-function aroundPivot(p,piv,rot){return add3(applyRot(sub3(p,piv),rot),piv);}
-function shadeHex(hex,f){
-  var r=parseInt(hex.slice(1,3),16),g=parseInt(hex.slice(3,5),16),b=parseInt(hex.slice(5,7),16);
-  return'rgb('+Math.min(255,r*f|0)+','+Math.min(255,g*f|0)+','+Math.min(255,b*f|0)+')';
-}
-
-var LIGHT=norm3({x:0.55,y:0.85,z:0.72});
-
-// ================================================
-// SKELETON — 14 bones
-// Y: feet y=-6, hips pivot y=6, shoulder pivot y=18, neck pivot y=21, head top y=29
-// ================================================
-function mkBone(id,bx,by,bz,bw,bh,bd,px,py,pz,parent){
-  return{id:id,box:{x:bx,y:by,z:bz,w:bw,h:bh,d:bd},
-         pivot:{x:px,y:py,z:pz},parent:parent,rot:{x:0,y:0,z:0}};
-}
-var BONES={
-  HIPS:        mkBone('HIPS',          0,  9,   0, 7,6,4,  0, 6,0, null),
-  SPINE:       mkBone('SPINE',         0, 15,   0, 8,6,4,  0,12,0, 'HIPS'),
-  NECK:        mkBone('NECK',          0, 19.5, 0, 4,3,3,  0,18,0, 'SPINE'),
-  HEAD:        mkBone('HEAD',          0, 25,   0, 8,8,8,  0,21,0, 'NECK'),
-  L_SHOULDER:  mkBone('L_SHOULDER',   -4, 18,   0, 4,2,3,  0,18,0, 'SPINE'),
-  L_UPPER_ARM: mkBone('L_UPPER_ARM',  -6, 15,   0, 4,6,3, -6,18,0, 'L_SHOULDER'),
-  L_LOWER_ARM: mkBone('L_LOWER_ARM',  -6,  9,   0, 3,6,3, -6,12,0, 'L_UPPER_ARM'),
-  R_SHOULDER:  mkBone('R_SHOULDER',    4, 18,   0, 4,2,3,  0,18,0, 'SPINE'),
-  R_UPPER_ARM: mkBone('R_UPPER_ARM',   6, 15,   0, 4,6,3,  6,18,0, 'R_SHOULDER'),
-  R_LOWER_ARM: mkBone('R_LOWER_ARM',   6,  9,   0, 3,6,3,  6,12,0, 'R_UPPER_ARM'),
-  L_UPPER_LEG: mkBone('L_UPPER_LEG',  -2,  3,   0, 4,6,4, -2, 6,0, 'HIPS'),
-  L_LOWER_LEG: mkBone('L_LOWER_LEG',  -2, -3,   0, 4,6,4, -2, 0,0, 'L_UPPER_LEG'),
-  R_UPPER_LEG: mkBone('R_UPPER_LEG',   2,  3,   0, 4,6,4,  2, 6,0, 'HIPS'),
-  R_LOWER_LEG: mkBone('R_LOWER_LEG',   2, -3,   0, 4,6,4,  2, 0,0, 'R_UPPER_LEG'),
-};
-
-// Pre-compute ancestor chains [self, parent, grandparent, ...]
-var CHAINS={};
-Object.keys(BONES).forEach(function(id){
-  var c=[],cur=id;
-  while(cur){c.push(cur);cur=BONES[cur]?BONES[cur].parent:null;}
-  CHAINS[id]=c;
-});
-
-function worldPos(v,boneId){
-  var p={x:v.x,y:v.y,z:v.z};
-  var chain=CHAINS[boneId];
-  for(var i=0;i<chain.length;i++)
-    p=aroundPivot(p,BONES[chain[i]].pivot,BONES[chain[i]].rot);
-  p.y+=S.charYOff;
-  return p;
-}
-function worldNorm(n,boneId){
-  var q={x:n.x,y:n.y,z:n.z};
-  var chain=CHAINS[boneId];
-  for(var i=0;i<chain.length;i++)
-    q=applyRot(q,BONES[chain[i]].rot);
-  return q;
-}
-
-// ================================================
-// CANVAS + PROJECTION
-// ================================================
-var canvas=document.getElementById('c');
-var ctx=canvas.getContext('2d');
-var CX=200,CY=160,SCALE=6;
-
-function resize(){
-  var left=document.querySelector('.left');
-  if(!left)return;
-  var W=left.clientWidth;
-  var H=left.clientHeight;
-  if(!W||!H)return;
-  // Canvas takes up the space minus the bottom controls
-  var bottom=0;
-  var sels=['.anim-bar','.fbx-zone','.fbx-status','.vp-hint'];
-  for(var i=0;i<sels.length;i++){
-    var el=left.querySelector(sels[i]);
-    if(el)bottom+=el.offsetHeight||0;
-  }
-  var canvasH=Math.max(160,H-bottom-4);
-  canvas.width=Math.max(100,W);
-  canvas.height=canvasH;
-  SCALE=Math.min(canvas.width,canvas.height)/54;
-  CX=canvas.width*0.5;
-  CY=canvas.height*0.52;
-}
-
-function project(p){
-  var r=rX(rY(p,S.vRotY),S.vRotX);
-  return{x:CX+r.x*SCALE, y:CY-r.y*SCALE, z:r.z};
-}
-
-// ================================================
-// BONE COLOR
-// ================================================
-function boneColor(id){
-  if(id==='HEAD'||id==='NECK'||id==='L_LOWER_ARM'||id==='R_LOWER_ARM')return S.skinColor;
-  if(id==='L_UPPER_LEG'||id==='R_UPPER_LEG'||
-     id==='L_LOWER_LEG'||id==='R_LOWER_LEG')return '#111128';
-  return S.jerseyColor;
-}
-
-// ================================================
-// GEOMETRY
-// ================================================
-var FACE_DEFS=[
-  {fn:'front',vi:[0,1,5,4],nx:0,ny:0,nz:1},
-  {fn:'back', vi:[3,2,6,7],nx:0,ny:0,nz:-1},
-  {fn:'top',  vi:[2,3,1,0],nx:0,ny:1,nz:0},
-  {fn:'bot',  vi:[4,5,7,6],nx:0,ny:-1,nz:0},
-  {fn:'left', vi:[2,0,4,6],nx:-1,ny:0,nz:0},
-  {fn:'right',vi:[1,3,7,5],nx:1,ny:0,nz:0},
+var FACE_PAL = [
+  '#111111','#555555','#aaaaaa','#ffffff',
+  '#8d5524','#c68642','#e0a87a','#f5c89a',
+  '#1a4fd6','#1a8c3c','#cc2222','#e07b00',
+  '#d4a017','#e06060','#7a3b1e','#f0e6c0',
+  '#2c1a0e','#0a0a0a', null,
 ];
 
-function getBoneFaces(bone){
-  var b=bone.box;
-  var hw=b.w/2,hh=b.h/2,hd=b.d/2,cx=b.x,cy=b.y,cz=b.z;
-  var V=[
-    {x:cx-hw,y:cy+hh,z:cz+hd},{x:cx+hw,y:cy+hh,z:cz+hd},
-    {x:cx-hw,y:cy+hh,z:cz-hd},{x:cx+hw,y:cy+hh,z:cz-hd},
-    {x:cx-hw,y:cy-hh,z:cz+hd},{x:cx+hw,y:cy-hh,z:cz+hd},
-    {x:cx-hw,y:cy-hh,z:cz-hd},{x:cx+hw,y:cy-hh,z:cz-hd},
-  ];
-  var WV=[];
-  for(var i=0;i<V.length;i++) WV.push(worldPos(V[i],bone.id));
+// ============================================================
+// THREE.JS STATE
+// ============================================================
+var THR = null; // Three.js namespace once loaded
+var renderer, scene, camera;
+var modelObj = null;       // loaded model Group
+var mixer = null;          // AnimationMixer
+var animClip = null;       // loaded animation clip
+var animAction = null;
 
-  var out=[];
-  for(var fi=0;fi<FACE_DEFS.length;fi++){
-    var fd=FACE_DEFS[fi];
-    var wn=rX(rY(worldNorm({x:fd.nx,y:fd.ny,z:fd.nz},bone.id),S.vRotY),S.vRotX);
-    if(wn.z<=0)continue;
-    var v2d=[];
-    for(var vi=0;vi<fd.vi.length;vi++) v2d.push(project(WV[fd.vi[vi]]));
-    var centZ=(v2d[0].z+v2d[1].z+v2d[2].z+v2d[3].z)*0.25;
-    var shad=Math.min(1,Math.max(0.28,0.28+0.72*dot3(wn,LIGHT)));
-    out.push({fn:fd.fn,v2d:v2d,centZ:centZ,shad:shad,bone:bone});
-  }
-  return out;
-}
+// Face overlay
+var faceTex = null;        // THREE.CanvasTexture
+var faceCanvas = null;     // HTMLCanvasElement (12x12)
+var faceMesh = null;       // THREE.Mesh (plane over face)
+var cameraTarget = {x:0, y:0, z:0};
+var camDist = 300;
 
-function bilerp(tl,tr,br,bl,u,v){
-  var tx=tl.x+(tr.x-tl.x)*u,ty=tl.y+(tr.y-tl.y)*u;
-  var bx=bl.x+(br.x-bl.x)*u,by=bl.y+(br.y-bl.y)*u;
-  return{x:tx+(bx-tx)*v,y:ty+(by-ty)*v};
-}
-function drawFaceGrid(v2d,shad){
-  var tl=v2d[0],tr=v2d[1],br=v2d[2],bl=v2d[3];
-  var N=10;
-  for(var row=0;row<N;row++){
-    for(var col=0;col<N;col++){
-      var c=S.faceGrid[row][col];if(!c)continue;
-      var u0=col/N,u1=(col+1)/N,v0=row/N,v1=(row+1)/N;
-      var p00=bilerp(tl,tr,br,bl,u0,v0),p10=bilerp(tl,tr,br,bl,u1,v0);
-      var p11=bilerp(tl,tr,br,bl,u1,v1),p01=bilerp(tl,tr,br,bl,u0,v1);
-      ctx.fillStyle=shadeHex(c,shad);
-      ctx.beginPath();
-      ctx.moveTo(p00.x,p00.y);ctx.lineTo(p10.x,p10.y);
-      ctx.lineTo(p11.x,p11.y);ctx.lineTo(p01.x,p01.y);
-      ctx.closePath();ctx.fill();
-    }
-  }
-}
+var canvas = document.getElementById('c');
+var placeholder = document.getElementById('placeholder');
+var last = 0;
 
-// ================================================
-// RENDER
-// ================================================
-var chestFrontV2d=null,chestFrontShad=1;
-
-function render(){
-  if(!canvas.width||!canvas.height)return;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  chestFrontV2d=null;
-
-  var allFaces=[];
-  var bkeys=Object.keys(BONES);
-  for(var bi=0;bi<bkeys.length;bi++){
-    var faces=getBoneFaces(BONES[bkeys[bi]]);
-    for(var fi=0;fi<faces.length;fi++) allFaces.push(faces[fi]);
-  }
-  allFaces.sort(function(a,b){return a.centZ-b.centZ;});
-
-  for(var i=0;i<allFaces.length;i++){
-    var f=allFaces[i];
-    ctx.fillStyle=shadeHex(boneColor(f.bone.id),f.shad);
-    ctx.beginPath();
-    ctx.moveTo(f.v2d[0].x,f.v2d[0].y);
-    for(var j=1;j<f.v2d.length;j++) ctx.lineTo(f.v2d[j].x,f.v2d[j].y);
-    ctx.closePath();ctx.fill();
-
-    if(f.bone.id==='HEAD'&&f.fn==='front') drawFaceGrid(f.v2d,f.shad);
-    if(f.bone.id==='SPINE'&&f.fn==='front'){chestFrontV2d=f.v2d;chestFrontShad=f.shad;}
-
-    ctx.strokeStyle='rgba(0,0,0,0.18)';ctx.lineWidth=0.6;
-    ctx.beginPath();
-    ctx.moveTo(f.v2d[0].x,f.v2d[0].y);
-    for(var k=1;k<f.v2d.length;k++) ctx.lineTo(f.v2d[k].x,f.v2d[k].y);
-    ctx.closePath();ctx.stroke();
-  }
-
-  if(chestFrontV2d){
-    var fcx=0,fcy=0;
-    for(var m=0;m<4;m++){fcx+=chestFrontV2d[m].x;fcy+=chestFrontV2d[m].y;}
-    fcx*=0.25;fcy*=0.25;
-    var sz=SCALE*2.0;
-    ctx.font='900 '+sz+'px "Courier New",monospace';
-    ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillStyle='rgba(0,0,0,'+(0.4*chestFrontShad)+')';
-    ctx.fillText(S.num,fcx+1,fcy+1);
-    ctx.fillStyle='rgba(255,255,255,'+(0.82*chestFrontShad)+')';
-    ctx.fillText(S.num,fcx,fcy);
-  }
-
-  var nsz=Math.max(8,SCALE*0.8);
-  ctx.font='700 '+nsz+'px "Courier New",monospace';
-  ctx.textAlign='center';ctx.textBaseline='top';
-  ctx.fillStyle='rgba(230,233,244,0.35)';
-  ctx.fillText(S.name,CX,CY+SCALE*10.5);
-}
-
-// ================================================
-// ANIMATIONS
-// ================================================
-var B=BONES;
-function resetBones(){
-  var keys=Object.keys(B);
-  for(var i=0;i<keys.length;i++) B[keys[i]].rot={x:0,y:0,z:0};
-  S.charYOff=0;
-}
-
-function animIdle(t){
-  B.NECK.rot       ={x:0,y:Math.sin(t*0.7)*0.09,z:Math.sin(t*0.4)*0.02};
-  B.HEAD.rot       ={x:0,y:Math.sin(t*0.7)*0.04,z:Math.sin(t*0.4)*0.01};
-  B.L_UPPER_ARM.rot={x:Math.sin(t*0.9)*0.07,y:0,z:-0.08-Math.sin(t*0.6)*0.03};
-  B.R_UPPER_ARM.rot={x:Math.sin(t*0.9+1)*0.07,y:0,z:0.08+Math.sin(t*0.6)*0.03};
-  B.HIPS.rot       ={x:0,y:0,z:Math.sin(t*0.5)*0.012};
-}
-function animWalk(t){
-  var s=Math.sin(t*3.5);
-  B.L_UPPER_LEG.rot={x:-s*0.52,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.52,y:0,z:0};
-  B.L_LOWER_LEG.rot={x:Math.max(0,s)*0.55,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*0.55,y:0,z:0};
-  B.L_SHOULDER.rot={x:s*0.05,y:0,z:0};B.R_SHOULDER.rot={x:-s*0.05,y:0,z:0};
-  B.L_UPPER_ARM.rot={x:s*0.38,y:0,z:-0.08};B.R_UPPER_ARM.rot={x:-s*0.38,y:0,z:0.08};
-  B.L_LOWER_ARM.rot={x:-Math.max(0,s)*0.35,y:0,z:0};B.R_LOWER_ARM.rot={x:-Math.max(0,-s)*0.35,y:0,z:0};
-  B.NECK.rot={x:Math.abs(s)*0.03,y:0,z:0};B.HIPS.rot={x:0,y:0,z:s*0.025};
-}
-function animRun(t){
-  S.charYOff=Math.abs(Math.sin(t*5))*0.8;
-  var s=Math.sin(t*5.5);
-  B.L_UPPER_LEG.rot={x:-s*0.85,y:0,z:0};B.R_UPPER_LEG.rot={x:s*0.85,y:0,z:0};
-  B.L_LOWER_LEG.rot={x:Math.max(0,s)*1.0,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*1.0,y:0,z:0};
-  B.L_SHOULDER.rot={x:s*0.08,y:0,z:0};B.R_SHOULDER.rot={x:-s*0.08,y:0,z:0};
-  B.L_UPPER_ARM.rot={x:s*0.65,y:0,z:-0.1};B.R_UPPER_ARM.rot={x:-s*0.65,y:0,z:0.1};
-  B.L_LOWER_ARM.rot={x:-0.2-Math.max(0,s)*0.5,y:0,z:0};B.R_LOWER_ARM.rot={x:-0.2-Math.max(0,-s)*0.5,y:0,z:0};
-  B.SPINE.rot={x:0.12,y:0,z:s*0.04};B.NECK.rot={x:-0.08+Math.abs(s)*0.05,y:0,z:0};
-}
-function animGoal(t){
-  S.charYOff=Math.abs(Math.sin(t*3))*3.5;
-  var p=Math.sin(t*3);
-  B.L_SHOULDER.rot={x:0,y:0,z:-0.4+p*0.1};B.R_SHOULDER.rot={x:0,y:0,z:0.4-p*0.1};
-  B.L_UPPER_ARM.rot={x:0,y:0,z:-2.1+p*0.2};B.R_UPPER_ARM.rot={x:0,y:0,z:2.1-p*0.2};
-  B.L_LOWER_ARM.rot={x:-0.2,y:0,z:p*0.15};B.R_LOWER_ARM.rot={x:-0.2,y:0,z:-p*0.15};
-  B.NECK.rot={x:-0.1,y:Math.sin(t*2)*0.12,z:0};B.HEAD.rot={x:-0.1,y:Math.sin(t*2)*0.08,z:0};
-  B.L_UPPER_LEG.rot={x:Math.sin(t*3)*0.18,y:0,z:0};B.R_UPPER_LEG.rot={x:-Math.sin(t*3)*0.18,y:0,z:0};
-  B.SPINE.rot={x:-0.05,y:0,z:p*0.03};
-}
-function animTackle(t){
-  B.HIPS.rot={x:0.6,y:0,z:0};
-  B.R_UPPER_LEG.rot={x:-1.05,y:0,z:0};B.R_LOWER_LEG.rot={x:0.3,y:0,z:0};
-  B.L_UPPER_LEG.rot={x:0.4,y:0,z:0.12};B.L_LOWER_LEG.rot={x:0.5,y:0,z:0};
-  B.L_SHOULDER.rot={x:-0.15,y:0,z:-0.1};B.R_SHOULDER.rot={x:-0.1,y:0,z:0.1};
-  B.L_UPPER_ARM.rot={x:-0.6,y:0,z:-0.35};B.L_LOWER_ARM.rot={x:-0.3,y:0,z:0};
-  B.R_UPPER_ARM.rot={x:-0.4,y:0,z:0.3};B.R_LOWER_ARM.rot={x:-0.2,y:0,z:0};
-  B.NECK.rot={x:-0.15+Math.sin(t)*0.02,y:Math.sin(t*0.8)*0.06,z:0};
-}
-function animDance(t){
-  S.charYOff=Math.abs(Math.sin(t*4))*0.5;
-  var s=Math.sin(t*4);
-  B.L_SHOULDER.rot={x:s*0.1,y:0,z:-0.3-s*0.2};B.R_SHOULDER.rot={x:-s*0.1,y:0,z:0.3+s*0.2};
-  B.L_UPPER_ARM.rot={x:s*0.2,y:0,z:-1.5-s*0.7};B.R_UPPER_ARM.rot={x:-s*0.2,y:0,z:1.5+s*0.7};
-  B.L_LOWER_ARM.rot={x:0.2+Math.abs(s)*0.4,y:0,z:0};B.R_LOWER_ARM.rot={x:0.2+Math.abs(s)*0.4,y:0,z:0};
-  B.NECK.rot={x:0,y:Math.sin(t*2)*0.22,z:Math.sin(t*4)*0.07};
-  B.HEAD.rot={x:0,y:Math.sin(t*2)*0.13,z:Math.sin(t*4)*0.03};
-  B.L_UPPER_LEG.rot={x:s*0.25,y:0,z:0};B.R_UPPER_LEG.rot={x:-s*0.25,y:0,z:0};
-  B.L_LOWER_LEG.rot={x:Math.max(0,s)*0.3,y:0,z:0};B.R_LOWER_LEG.rot={x:Math.max(0,-s)*0.3,y:0,z:0};
-  B.HIPS.rot={x:0,y:0,z:Math.sin(t*2)*0.06};
-}
-function animImported(t){
-  if(!S.importedAnim)return;
-  var anim=S.importedAnim;
-  var fi=Math.floor(t*anim.fps)%anim.frameCount;
-  var frame=anim.frames[fi];if(!frame)return;
-  var ids=Object.keys(frame);
-  for(var i=0;i<ids.length;i++){
-    var id=ids[i];
-    if(BONES[id])BONES[id].rot={x:frame[id].x,y:frame[id].y,z:frame[id].z};
-  }
-}
-var ANIMS={idle:animIdle,walk:animWalk,run:animRun,goal:animGoal,tackle:animTackle,dance:animDance,imported:animImported};
-
-// ================================================
-// MAIN LOOP
-// ================================================
-var last=0;
-function loop(ts){
-  ts=ts||0;
-  var dt=Math.min((ts-last)/1000,0.05);
-  last=ts;
-  S.animT+=dt;
-  resetBones();
-  if(ANIMS[S.anim])ANIMS[S.anim](S.animT);
-  if(S.autoRot&&!S.dragging)S.vRotY+=0.007;
-  render();
-  requestAnimationFrame(loop);
-}
-
-// ================================================
-// DRAG / ROTATE
-// ================================================
-canvas.addEventListener('mousedown',function(e){
-  S.dragging=true;S.autoRot=false;S.lastX=e.clientX;S.lastY=e.clientY;
-});
-window.addEventListener('mousemove',function(e){
-  if(!S.dragging)return;
-  S.vRotY+=(e.clientX-S.lastX)*0.013;
-  S.vRotX+=(e.clientY-S.lastY)*0.013;
-  S.vRotX=Math.max(-1.1,Math.min(1.1,S.vRotX));
-  S.lastX=e.clientX;S.lastY=e.clientY;
-});
-window.addEventListener('mouseup',function(){S.dragging=false;});
-canvas.addEventListener('dblclick',function(){S.autoRot=true;});
-canvas.addEventListener('touchstart',function(e){
-  e.preventDefault();S.dragging=true;S.autoRot=false;
-  S.lastX=e.touches[0].clientX;S.lastY=e.touches[0].clientY;
-},{passive:false});
-canvas.addEventListener('touchmove',function(e){
-  e.preventDefault();if(!S.dragging)return;
-  S.vRotY+=(e.touches[0].clientX-S.lastX)*0.013;
-  S.vRotX+=(e.touches[0].clientY-S.lastY)*0.013;
-  S.vRotX=Math.max(-1.1,Math.min(1.1,S.vRotX));
-  S.lastX=e.touches[0].clientX;S.lastY=e.touches[0].clientY;
-},{passive:false});
-canvas.addEventListener('touchend',function(){S.dragging=false;});
-
-// ================================================
-// ANIM BUTTONS
-// ================================================
-var animBtns=document.querySelectorAll('.anim-btn');
-for(var _ai=0;_ai<animBtns.length;_ai++){
-  (function(btn){
-    btn.addEventListener('click',function(){
-      for(var j=0;j<animBtns.length;j++)animBtns[j].classList.remove('active');
-      btn.classList.add('active');
-      S.anim=btn.dataset.anim;S.animT=0;
-    });
-  })(animBtns[_ai]);
-}
-
-// ================================================
-// FBX IMPORT — Three.js charge lazily a la demande
-// ================================================
-var MIXAMO_MAP={
-  mixamorigHips:'HIPS',                    Hips:'HIPS',
-  mixamorigSpine:'SPINE',                  Spine:'SPINE',
-  mixamorigSpine1:'SPINE',                 Spine1:'SPINE',
-  mixamorigSpine2:'SPINE',                 Spine2:'SPINE',
-  mixamorigNeck:'NECK',                    Neck:'NECK',
-  mixamorigHead:'HEAD',                    Head:'HEAD',
-  mixamorigLeftShoulder:'L_SHOULDER',      LeftShoulder:'L_SHOULDER',
-  mixamorigLeftArm:'L_UPPER_ARM',          LeftArm:'L_UPPER_ARM',
-  mixamorigLeftForeArm:'L_LOWER_ARM',      LeftForeArm:'L_LOWER_ARM',
-  mixamorigRightShoulder:'R_SHOULDER',     RightShoulder:'R_SHOULDER',
-  mixamorigRightArm:'R_UPPER_ARM',         RightArm:'R_UPPER_ARM',
-  mixamorigRightForeArm:'R_LOWER_ARM',     RightForeArm:'R_LOWER_ARM',
-  mixamorigLeftUpLeg:'L_UPPER_LEG',        LeftUpLeg:'L_UPPER_LEG',
-  mixamorigLeftLeg:'L_LOWER_LEG',          LeftLeg:'L_LOWER_LEG',
-  mixamorigRightUpLeg:'R_UPPER_LEG',       RightUpLeg:'R_UPPER_LEG',
-  mixamorigRightLeg:'R_LOWER_LEG',         RightLeg:'R_LOWER_LEG',
-};
-
-var _fbxReady=false;
-function loadFBXLibs(cb){
-  if(_fbxReady){cb(null);return;}
-  var BASE='https://cdn.jsdelivr.net/npm/three@0.132.2/build/';
-  var EX='https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/';
-  function s(src,next){
-    var el=document.createElement('script');
-    el.src=src;
-    el.onload=function(){next(null);};
-    el.onerror=function(){next(new Error('Impossible de charger: '+src.split('/').pop()));};
+// ============================================================
+// LOAD THREE.JS + FBXLOADER
+// ============================================================
+var libsReady = false;
+var libsQueue = [];
+function loadLibs(cb) {
+  if (libsReady) { cb(null); return; }
+  libsQueue.push(cb);
+  if (libsQueue.length > 1) return;
+  var BASE = 'https://cdn.jsdelivr.net/npm/three@0.132.2/build/';
+  var EX   = 'https://cdn.jsdelivr.net/npm/three@0.132.2/examples/js/';
+  function s(src, next) {
+    var el = document.createElement('script');
+    el.src = src;
+    el.onload = function(){ next(null); };
+    el.onerror = function(){ next(new Error('Echec chargement: ' + src.split('/').pop())); };
     document.head.appendChild(el);
   }
-  s(BASE+'three.min.js',function(e1){
-    if(e1){cb(e1);return;}
-    s(EX+'libs/fflate.min.js',function(e2){
-      if(e2){cb(e2);return;}
-      s(EX+'loaders/FBXLoader.js',function(e3){
-        if(e3){cb(e3);return;}
-        _fbxReady=true;cb(null);
+  s(BASE+'three.min.js', function(e1){ if(e1){ flush(e1); return; }
+    s(EX+'libs/fflate.min.js', function(e2){ if(e2){ flush(e2); return; }
+      s(EX+'loaders/FBXLoader.js', function(e3){
+        if(e3){ flush(e3); return; }
+        THR = THREE;
+        libsReady = true;
+        flush(null);
       });
     });
   });
+  function flush(err) {
+    libsQueue.forEach(function(fn){ fn(err); });
+    libsQueue = [];
+  }
 }
 
-function parseFBXAnim(obj){
-  if(!obj.animations||!obj.animations.length)
-    throw new Error('Aucune animation dans ce fichier');
-  var clip=obj.animations[0];
-  var FPS=30,frameCount=Math.ceil(clip.duration*FPS)+1;
+// ============================================================
+// THREE.JS INIT
+// ============================================================
+function initThree() {
+  renderer = new THR.WebGLRenderer({ canvas: canvas, antialias: false, alpha: true });
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.setClearColor(0x050609, 1);
 
-  // Build name→node map (AnimationMixer évalue correctement les pre/post-rotations FBX)
-  var nodeByName={};
-  obj.traverse(function(node){if(node.name)nodeByName[node.name]=node;});
+  scene = new THR.Scene();
+  scene.fog = new THR.Fog(0x050609, 800, 2000);
 
-  var mnames=Object.keys(MIXAMO_MAP).filter(function(k){return MIXAMO_MAP[k]&&nodeByName[k];});
-  if(!mnames.length)throw new Error('Aucun os Mixamo reconnu dans ce fichier');
+  camera = new THR.PerspectiveCamera(45, 1, 0.1, 10000);
 
-  var mixer=new THREE.AnimationMixer(obj);
-  mixer.clipAction(clip).play();
+  // Lights
+  scene.add(new THR.AmbientLight(0xffffff, 0.55));
+  var sun = new THR.DirectionalLight(0xffffff, 1.1);
+  sun.position.set(0.6, 1.0, 0.9).normalize();
+  scene.add(sun);
+  var fill = new THR.DirectionalLight(0x8899ff, 0.3);
+  fill.position.set(-1, 0.2, -0.8);
+  scene.add(fill);
 
-  // Capture la T-pose à t=0 pour normalisation delta
-  mixer.setTime(0);
-  var bindQ={};
-  mnames.forEach(function(mn){bindQ[mn]=nodeByName[mn].quaternion.clone();});
-
-  var frames=[];
-  for(var f=0;f<frameCount;f++){
-    mixer.setTime(f/FPS);
-    var accum={};
-    mnames.forEach(function(mn){
-      var ourId=MIXAMO_MAP[mn];
-      // delta = bindQ^-1 × frameQ : rotation pure depuis la T-pose, en espace local os
-      var qDelta=bindQ[mn].clone().invert().multiply(nodeByName[mn].quaternion.clone());
-      if(!accum[ourId])accum[ourId]={qx:0,qy:0,qz:0,qw:0,n:0};
-      var a=accum[ourId];
-      a.qx+=qDelta.x;a.qy+=qDelta.y;a.qz+=qDelta.z;a.qw+=qDelta.w;a.n++;
-    });
-    var frame={};
-    Object.keys(accum).forEach(function(aid){
-      var a=accum[aid],n=a.n;
-      var avg=new THREE.Quaternion(a.qx/n,a.qy/n,a.qz/n,a.qw/n).normalize();
-      var e=new THREE.Euler().setFromQuaternion(avg,'XYZ');
-      frame[aid]={x:e.x,y:e.y,z:e.z};
-    });
-    frames.push(frame);
-  }
-
-  return{name:clip.name,fps:FPS,frameCount:frameCount,duration:clip.duration,frames:frames};
+  resizeThree();
+  requestAnimationFrame(renderLoop);
 }
 
-var fbxZone=document.getElementById('fbx-zone');
-var fbxInput=document.getElementById('fbx-input');
-var fbxStatus=document.getElementById('fbx-status');
-var btnFbxPlay=document.getElementById('btn-fbx-play');
+function resizeThree() {
+  var wrap = document.querySelector('.canvas-wrap');
+  if (!wrap) return;
+  var W = wrap.clientWidth, H = wrap.clientHeight;
+  if (!W || !H) return;
+  canvas.width = W; canvas.height = H;
+  renderer.setSize(W, H, false);
+  camera.aspect = W / H;
+  camera.updateProjectionMatrix();
+}
 
-function handleFBXFile(file){
-  if(!file.name.toLowerCase().endsWith('.fbx')){
-    fbxStatus.className='fbx-status err';fbxStatus.textContent='Fichier .fbx requis';return;
+// ============================================================
+// CAMERA ORBIT
+// ============================================================
+function updateCamera() {
+  var cx = cameraTarget.x, cy = cameraTarget.y, cz = cameraTarget.z;
+  camera.position.set(
+    cx + camDist * Math.sin(S.vRotY) * Math.cos(S.vRotX),
+    cy + camDist * Math.sin(S.vRotX),
+    cz + camDist * Math.cos(S.vRotY) * Math.cos(S.vRotX)
+  );
+  camera.lookAt(cx, cy, cz);
+}
+
+// ============================================================
+// RENDER LOOP
+// ============================================================
+function renderLoop(ts) {
+  requestAnimationFrame(renderLoop);
+  ts = ts || 0;
+  var dt = Math.min((ts - last) / 1000, 0.05);
+  last = ts;
+
+  if (!renderer) return;
+
+  if (S.autoRot && !S.dragging) S.vRotY += 0.007;
+
+  if (mixer && S.anim === 'imported') {
+    mixer.update(dt);
   }
-  fbxStatus.className='fbx-status';fbxStatus.textContent='Chargement Three.js...';
-  loadFBXLibs(function(err){
-    if(err){fbxStatus.className='fbx-status err';fbxStatus.textContent='Erreur: '+err.message;return;}
-    fbxStatus.textContent='Parsing FBX...';
-    var reader=new FileReader();
-    reader.onload=function(e){
-      try{
-        var loader=new THREE.FBXLoader();
-        var obj=loader.parse(e.target.result,'/');
-        var anim=parseFBXAnim(obj);
-        S.importedAnim=anim;
-        fbxStatus.className='fbx-status ok';
-        fbxStatus.textContent='OK: '+anim.name+' '+anim.duration.toFixed(1)+'s '+anim.frameCount+'fr '+Object.keys(anim.frames[0]||{}).length+' os';
-        btnFbxPlay.style.display='';
-        for(var j=0;j<animBtns.length;j++)animBtns[j].classList.remove('active');
-        btnFbxPlay.classList.add('active');
-        S.anim='imported';S.animT=0;
-      }catch(e2){
-        fbxStatus.className='fbx-status err';
-        fbxStatus.textContent='Erreur: '+e2.message;
-        console.error('FBX parse error:',e2);
+
+  updateCamera();
+  renderer.render(scene, camera);
+}
+
+// ============================================================
+// MODEL FBX IMPORT
+// ============================================================
+function setModelStatus(msg, cls) {
+  var el = document.getElementById('model-status');
+  el.textContent = msg; el.className = 'fbx-st ' + (cls || '');
+}
+
+function loadModelFBX(file) {
+  setModelStatus('Chargement Three.js…', 'loading');
+  loadLibs(function(err) {
+    if (err) { setModelStatus('Erreur: ' + err.message, 'err'); return; }
+    if (!renderer) initThree();
+    setModelStatus('Parsing FBX…', 'loading');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var loader = new THR.FBXLoader();
+        var obj = loader.parse(e.target.result, '/');
+        setupModel(obj);
+        document.getElementById('model-zone').classList.add('loaded');
+        setModelStatus('OK — ' + file.name, 'ok');
+        placeholder.style.display = 'none';
+      } catch(ex) {
+        setModelStatus('Erreur: ' + ex.message, 'err');
+        console.error('Model FBX error:', ex);
       }
     };
-    reader.onerror=function(){fbxStatus.className='fbx-status err';fbxStatus.textContent='Erreur lecture fichier';};
+    reader.onerror = function(){ setModelStatus('Erreur lecture fichier', 'err'); };
     reader.readAsArrayBuffer(file);
   });
 }
 
-fbxZone.addEventListener('click',function(){fbxInput.click();});
-fbxInput.addEventListener('change',function(e){if(e.target.files[0])handleFBXFile(e.target.files[0]);});
-fbxZone.addEventListener('dragover',function(e){e.preventDefault();fbxZone.classList.add('drag-over');});
-fbxZone.addEventListener('dragleave',function(){fbxZone.classList.remove('drag-over');});
-fbxZone.addEventListener('drop',function(e){
-  e.preventDefault();fbxZone.classList.remove('drag-over');
-  if(e.dataTransfer.files[0])handleFBXFile(e.dataTransfer.files[0]);
+function setupModel(obj) {
+  // Remove previous model
+  if (modelObj) scene.remove(modelObj);
+  if (faceMesh) { if (faceMesh.parent) faceMesh.parent.remove(faceMesh); faceMesh = null; }
+  modelObj = null; mixer = null; animAction = null;
+
+  // Normalize scale and center
+  var box = new THR.Box3().setFromObject(obj);
+  var size = box.getSize(new THR.Vector3());
+  var center = box.getCenter(new THR.Vector3());
+  var maxDim = Math.max(size.x, size.y, size.z);
+  if (maxDim < 0.0001) maxDim = 1;
+  var normScale = 160 / maxDim; // normalize to 160 units tall
+  obj.scale.setScalar(normScale);
+
+  // Recompute box after scale
+  box.setFromObject(obj);
+  var newCenter = box.getCenter(new THR.Vector3());
+  var newSize = box.getSize(new THR.Vector3());
+  obj.position.sub(newCenter);
+  obj.position.y += newSize.y * 0.5; // feet at y=0
+
+  scene.add(obj);
+  modelObj = obj;
+
+  // Camera target = model center
+  cameraTarget = { x: 0, y: newSize.y * 0.4, z: 0 };
+  camDist = Math.max(newSize.x, newSize.z) * 3.5 + newSize.y;
+  S.vRotX = -0.08;
+  S.vRotY = 0.35;
+
+  // Detect white face area
+  detectFaceArea(obj);
+
+  // Setup AnimationMixer (will be used when animation FBX is loaded)
+  mixer = new THR.AnimationMixer(obj);
+}
+
+// ============================================================
+// FACE AREA DETECTION
+// ============================================================
+function detectFaceArea(obj) {
+  var candidates = []; // {pos: Vector3, meshScale}
+
+  obj.traverse(function(node) {
+    if (!node.isSkinnedMesh && !node.isMesh) return;
+    var geo = node.geometry;
+    if (!geo) return;
+    var positions = geo.attributes.position;
+    if (!positions) return;
+
+    // Try vertex colors first
+    if (geo.attributes.color) {
+      var colors = geo.attributes.color;
+      for (var i = 0; i < colors.count; i++) {
+        var r = colors.getX(i), g = colors.getY(i), b = colors.getZ(i);
+        if (r > 0.82 && g > 0.82 && b > 0.82) {
+          // World position of this vertex
+          var lp = new THR.Vector3(positions.getX(i), positions.getY(i), positions.getZ(i));
+          lp.applyMatrix4(node.matrixWorld);
+          candidates.push(lp);
+        }
+      }
+    }
+
+    // Try UV + palette texture
+    if (!candidates.length && geo.attributes.uv) {
+      var mats = Array.isArray(node.material) ? node.material : [node.material];
+      for (var mi = 0; mi < mats.length; mi++) {
+        var mat = mats[mi];
+        if (!mat || !mat.map || !mat.map.image) continue;
+        var img = mat.map.image;
+        var pc = document.createElement('canvas');
+        pc.width = img.width; pc.height = img.height;
+        pc.getContext('2d').drawImage(img, 0, 0);
+        var pd = pc.getContext('2d').getImageData(0, 0, img.width, img.height).data;
+        var uvs = geo.attributes.uv;
+        for (var vi = 0; vi < uvs.count; vi++) {
+          var u = uvs.getX(vi), v = uvs.getY(vi);
+          var px = Math.min(img.width - 1, Math.max(0, Math.round(u * img.width)));
+          var py = Math.min(img.height - 1, Math.max(0, Math.round((1 - v) * img.height)));
+          var pidx = (py * img.width + px) * 4;
+          var pr = pd[pidx]/255, pg = pd[pidx+1]/255, pb = pd[pidx+2]/255;
+          if (pr > 0.82 && pg > 0.82 && pb > 0.82) {
+            var lp2 = new THR.Vector3(positions.getX(vi), positions.getY(vi), positions.getZ(vi));
+            lp2.applyMatrix4(node.matrixWorld);
+            candidates.push(lp2);
+          }
+        }
+      }
+    }
+  });
+
+  if (!candidates.length) {
+    console.warn('Aucune zone blanche detectee sur le modele.');
+    return;
+  }
+
+  // Compute bounding box of white region
+  var minX=Infinity, maxX=-Infinity, minY=Infinity, maxY=-Infinity;
+  var sumZ = 0;
+  candidates.forEach(function(p) {
+    minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x);
+    minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y);
+    sumZ += p.z;
+  });
+  var faceW = maxX - minX, faceH = maxY - minY;
+  var faceCX = (minX + maxX) * 0.5;
+  var faceCY = (minY + maxY) * 0.5;
+  var faceCZ = sumZ / candidates.length + 0.5; // slightly in front
+
+  // Find head bone to parent the face plane to
+  var headBone = null;
+  var headNames = ['mixamorigHead','Head','head','mixamorig:Head'];
+  if (modelObj) {
+    modelObj.traverse(function(node) {
+      if (!headBone && headNames.indexOf(node.name) !== -1) headBone = node;
+    });
+  }
+
+  // Create face canvas texture (12x12 px)
+  faceCanvas = document.createElement('canvas');
+  faceCanvas.width = FACE_COLS; faceCanvas.height = FACE_ROWS;
+  faceTex = new THR.CanvasTexture(faceCanvas);
+  faceTex.magFilter = THR.NearestFilter;
+  faceTex.minFilter = THR.NearestFilter;
+
+  var faceMat = new THR.MeshBasicMaterial({
+    map: faceTex,
+    transparent: true,
+    depthWrite: false,
+  });
+  var faceGeo = new THR.PlaneGeometry(faceW, faceH);
+  faceMesh = new THR.Mesh(faceGeo, faceMat);
+
+  if (headBone) {
+    // Convert face world position to head bone local space
+    var headWorldInv = new THR.Matrix4();
+    headBone.updateMatrixWorld(true);
+    headWorldInv.copy(headBone.matrixWorld).invert();
+    var localPos = new THR.Vector3(faceCX, faceCY, faceCZ).applyMatrix4(headWorldInv);
+    faceMesh.position.copy(localPos);
+    headBone.add(faceMesh);
+  } else {
+    // No head bone found — place in world space
+    faceMesh.position.set(faceCX, faceCY, faceCZ);
+    scene.add(faceMesh);
+  }
+
+  drawFaceTex();
+}
+
+// ============================================================
+// FACE TEXTURE
+// ============================================================
+function drawFaceTex() {
+  if (!faceCanvas) return;
+  var ctx = faceCanvas.getContext('2d');
+  ctx.clearRect(0, 0, FACE_COLS, FACE_ROWS);
+  for (var r = 0; r < FACE_ROWS; r++) {
+    for (var c = 0; c < FACE_COLS; c++) {
+      if (faceGrid[r][c]) {
+        ctx.fillStyle = faceGrid[r][c];
+        ctx.fillRect(c, r, 1, 1);
+      }
+    }
+  }
+  if (faceTex) faceTex.needsUpdate = true;
+}
+
+// ============================================================
+// ANIMATION FBX IMPORT
+// ============================================================
+function setAnimStatus(msg, cls) {
+  var el = document.getElementById('anim-status');
+  el.textContent = msg; el.className = 'fbx-st ' + (cls || '');
+}
+
+function loadAnimFBX(file) {
+  setAnimStatus('Chargement…', 'loading');
+  loadLibs(function(err) {
+    if (err) { setAnimStatus('Erreur: ' + err.message, 'err'); return; }
+    setAnimStatus('Parsing…', 'loading');
+    var reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        var loader = new THR.FBXLoader();
+        var animObj = loader.parse(e.target.result, '/');
+        if (!animObj.animations || !animObj.animations.length)
+          throw new Error('Aucune animation dans ce FBX');
+
+        animClip = animObj.animations[0];
+
+        if (!mixer) {
+          // No model yet — just store clip
+          setAnimStatus('OK (en attente du modèle)', 'ok');
+          return;
+        }
+
+        if (animAction) animAction.stop();
+        animAction = mixer.clipAction(animClip);
+        animAction.play();
+
+        var btn = document.getElementById('btn-anim-fbx');
+        btn.style.display = '';
+        setAnimBtnsActive('imported');
+        S.anim = 'imported';
+
+        setAnimStatus('OK — ' + animClip.name + ' ' + animClip.duration.toFixed(1) + 's', 'ok');
+      } catch(ex) {
+        setAnimStatus('Erreur: ' + ex.message, 'err');
+        console.error('Anim FBX error:', ex);
+      }
+    };
+    reader.onerror = function(){ setAnimStatus('Erreur lecture fichier', 'err'); };
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+function setAnimBtnsActive(animId) {
+  var btns = document.querySelectorAll('.anim-btn');
+  for (var i = 0; i < btns.length; i++) btns[i].classList.remove('active');
+  var target = document.querySelector('.anim-btn[data-anim="' + animId + '"]');
+  if (target) target.classList.add('active');
+  S.anim = animId;
+}
+
+// T-pose button: stop animation
+document.getElementById('anim-bar').addEventListener('click', function(e) {
+  var btn = e.target.closest('.anim-btn');
+  if (!btn) return;
+  setAnimBtnsActive(btn.dataset.anim);
+  if (btn.dataset.anim === 'tpose') {
+    if (animAction) { animAction.stop(); }
+    if (mixer) { mixer.setTime(0); }
+  } else if (btn.dataset.anim === 'imported') {
+    if (animAction) { animAction.play(); }
+  }
 });
 
-// ================================================
-// FACE GRID
-// ================================================
-function buildFaceGrid(){
-  var g=document.getElementById('face-grid');g.innerHTML='';
-  for(var r=0;r<10;r++){
-    for(var c=0;c<10;c++){
-      var px=document.createElement('div');
-      px.className='px';px.dataset.r=r;px.dataset.c=c;
-      if(S.faceGrid[r][c])px.style.background=S.faceGrid[r][c];
+// ============================================================
+// DRAG / ROTATE
+// ============================================================
+canvas.addEventListener('mousedown', function(e) {
+  S.dragging = true; S.autoRot = false;
+  S.lastX = e.clientX; S.lastY = e.clientY;
+});
+window.addEventListener('mousemove', function(e) {
+  if (!S.dragging) return;
+  S.vRotY += (e.clientX - S.lastX) * 0.013;
+  S.vRotX += (e.clientY - S.lastY) * 0.013;
+  S.vRotX = Math.max(-1.2, Math.min(1.2, S.vRotX));
+  S.lastX = e.clientX; S.lastY = e.clientY;
+});
+window.addEventListener('mouseup', function() { S.dragging = false; });
+canvas.addEventListener('dblclick', function() { S.autoRot = true; });
+
+canvas.addEventListener('touchstart', function(e) {
+  e.preventDefault(); S.dragging = true; S.autoRot = false;
+  S.lastX = e.touches[0].clientX; S.lastY = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchmove', function(e) {
+  e.preventDefault(); if (!S.dragging) return;
+  S.vRotY += (e.touches[0].clientX - S.lastX) * 0.013;
+  S.vRotX += (e.touches[0].clientY - S.lastY) * 0.013;
+  S.vRotX = Math.max(-1.2, Math.min(1.2, S.vRotX));
+  S.lastX = e.touches[0].clientX; S.lastY = e.touches[0].clientY;
+}, { passive: false });
+canvas.addEventListener('touchend', function() { S.dragging = false; });
+
+// ============================================================
+// FBX DROP ZONES
+// ============================================================
+function setupDropZone(zoneId, inputId, handler) {
+  var zone = document.getElementById(zoneId);
+  var inp  = document.getElementById(inputId);
+  zone.addEventListener('click', function() { inp.click(); });
+  inp.addEventListener('change', function(e) { if (e.target.files[0]) handler(e.target.files[0]); });
+  zone.addEventListener('dragover', function(e) { e.preventDefault(); zone.classList.add('drag-over'); });
+  zone.addEventListener('dragleave', function() { zone.classList.remove('drag-over'); });
+  zone.addEventListener('drop', function(e) {
+    e.preventDefault(); zone.classList.remove('drag-over');
+    var f = e.dataTransfer.files[0];
+    if (f) handler(f);
+  });
+}
+
+setupDropZone('model-zone', 'model-input', loadModelFBX);
+setupDropZone('anim-zone',  'anim-input',  loadAnimFBX);
+
+// ============================================================
+// FACE GRID UI
+// ============================================================
+function buildFaceGrid() {
+  var g = document.getElementById('face-grid');
+  g.innerHTML = '';
+  for (var r = 0; r < FACE_ROWS; r++) {
+    for (var c = 0; c < FACE_COLS; c++) {
+      var px = document.createElement('div');
+      px.className = 'px';
+      px.dataset.r = r; px.dataset.c = c;
+      if (faceGrid[r][c]) px.style.background = faceGrid[r][c];
       g.appendChild(px);
     }
   }
 }
-function paintPx(el){
-  var r=+el.dataset.r,c=+el.dataset.c;if(isNaN(r))return;
-  S.faceGrid[r][c]=S.paintColor;
-  el.style.background=S.paintColor||'var(--ct)';
+
+function paintPx(el) {
+  var r = +el.dataset.r, c = +el.dataset.c;
+  if (isNaN(r)) return;
+  faceGrid[r][c] = S.paintColor;
+  el.style.background = S.paintColor || 'var(--ct)';
+  drawFaceTex();
 }
-var gEl=document.getElementById('face-grid');
-gEl.addEventListener('mousedown',function(e){if(e.target.classList.contains('px')){S.painting=true;paintPx(e.target);}});
-gEl.addEventListener('mousemove',function(e){if(S.painting&&e.target.classList.contains('px'))paintPx(e.target);});
-window.addEventListener('mouseup',function(){S.painting=false;});
-gEl.addEventListener('touchstart',function(e){e.preventDefault();S.painting=true;},{passive:false});
-gEl.addEventListener('touchmove',function(e){
+
+var gEl = document.getElementById('face-grid');
+gEl.addEventListener('mousedown', function(e) {
+  if (e.target.classList.contains('px')) { S.painting = true; paintPx(e.target); }
+});
+gEl.addEventListener('mousemove', function(e) {
+  if (S.painting && e.target.classList.contains('px')) paintPx(e.target);
+});
+window.addEventListener('mouseup', function() { S.painting = false; });
+
+gEl.addEventListener('touchstart', function(e) { e.preventDefault(); S.painting = true; }, { passive: false });
+gEl.addEventListener('touchmove', function(e) {
   e.preventDefault();
-  var te=e.touches[0];
-  var el=document.elementFromPoint(te.clientX,te.clientY);
-  if(el&&el.classList.contains('px'))paintPx(el);
-},{passive:false});
-gEl.addEventListener('touchend',function(){S.painting=false;});
-document.getElementById('btn-clear').addEventListener('click',function(){
-  for(var r=0;r<10;r++)for(var c=0;c<10;c++)S.faceGrid[r][c]=null;
+  var el = document.elementFromPoint(e.touches[0].clientX, e.touches[0].clientY);
+  if (el && el.classList.contains('px')) paintPx(el);
+}, { passive: false });
+gEl.addEventListener('touchend', function() { S.painting = false; });
+
+document.getElementById('btn-clear').addEventListener('click', function() {
+  for (var r = 0; r < FACE_ROWS; r++) for (var c = 0; c < FACE_COLS; c++) faceGrid[r][c] = null;
   buildFaceGrid();
+  drawFaceTex();
 });
 
-// ================================================
+// ============================================================
 // PALETTE
-// ================================================
-function buildPalette(){
-  var p=document.getElementById('palette');p.innerHTML='';
-  for(var i=0;i<FACE_PAL.length;i++){
-    (function(col){
-      var el=document.createElement('div');
-      el.className='pc';
-      if(col)el.style.background=col;else el.textContent='X';
-      if(col===S.paintColor)el.classList.add('sel');
-      el.addEventListener('click',function(){
-        S.paintColor=col;
-        p.querySelectorAll('.pc').forEach(function(e){e.classList.remove('sel');});
-        el.classList.add('sel');
-      });
-      p.appendChild(el);
-    })(FACE_PAL[i]);
-  }
+// ============================================================
+function buildPalette() {
+  var p = document.getElementById('palette');
+  p.innerHTML = '';
+  FACE_PAL.forEach(function(col) {
+    var el = document.createElement('div');
+    el.className = 'pc';
+    if (col) el.style.background = col; else el.textContent = 'X';
+    if (col === S.paintColor) el.classList.add('sel');
+    el.addEventListener('click', function() {
+      S.paintColor = col;
+      p.querySelectorAll('.pc').forEach(function(e) { e.classList.remove('sel'); });
+      el.classList.add('sel');
+    });
+    p.appendChild(el);
+  });
 }
 
-// ================================================
-// COLOR CHIPS
-// ================================================
-function buildChips(id,cols,getVal,setVal){
-  var cont=document.getElementById(id);cont.innerHTML='';
-  for(var i=0;i<cols.length;i++){
-    (function(col){
-      var el=document.createElement('div');
-      el.className='chip'+(col===getVal()?' sel':'');
-      el.style.background=col;
-      el.addEventListener('click',function(){setVal(col);buildChips(id,cols,getVal,setVal);});
-      cont.appendChild(el);
-    })(cols[i]);
-  }
-}
-
-// ================================================
+// ============================================================
 // INPUTS
-// ================================================
-document.getElementById('inp-name').addEventListener('input',function(e){S.name=e.target.value;});
-document.getElementById('inp-num').addEventListener('input',function(e){
-  S.num=String(Math.min(99,Math.max(1,parseInt(e.target.value)||1)));
+// ============================================================
+document.getElementById('inp-name').addEventListener('input', function(e) { S.name = e.target.value; });
+document.getElementById('inp-num').addEventListener('input', function(e) {
+  S.num = String(Math.min(99, Math.max(1, parseInt(e.target.value) || 1)));
 });
 
-// ================================================
-// DEFAULT FACE
-// ================================================
-S.faceGrid[2][3]='#2c1a0e';S.faceGrid[2][6]='#2c1a0e';
-S.faceGrid[4][3]='#0a0a0a';S.faceGrid[4][6]='#0a0a0a';
-S.faceGrid[7][3]='#e06060';S.faceGrid[7][4]='#e06060';
-S.faceGrid[7][5]='#e06060';S.faceGrid[7][6]='#e06060';
+// ============================================================
+// RESIZE
+// ============================================================
+window.addEventListener('resize', function() {
+  if (renderer) resizeThree();
+});
 
-// ================================================
-// INIT
-// ================================================
+// ============================================================
+// INIT — load Three.js eagerly so renderer is ready
+// ============================================================
 buildFaceGrid();
 buildPalette();
-buildChips('skin-chips',SKIN_COLS,function(){return S.skinColor;},function(v){S.skinColor=v;});
-buildChips('jersey-chips',JERSEY_COLS,function(){return S.jerseyColor;},function(v){S.jerseyColor=v;});
 
-// Window resize — pas de ResizeObserver pour eviter boucles
-window.addEventListener('resize',resize);
-
-// Attendre le premier rendu browser pour avoir les vraies dimensions
-requestAnimationFrame(function(){
-  resize();
-  requestAnimationFrame(function(){
-    resize(); // 2nd RAF pour les cas ou le 1er est trop tot
-    loop();
-  });
+// Start loading Three.js in background
+loadLibs(function(err) {
+  if (err) {
+    setModelStatus('Erreur chargement Three.js', 'err');
+    return;
+  }
+  initThree();
+  setModelStatus('Prêt — déposez votre modèle', '');
 });
 
 })();
