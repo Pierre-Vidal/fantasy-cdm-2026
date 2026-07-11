@@ -117,6 +117,20 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
           <span id="face-size-val" style="font-family:'Courier New',monospace;font-size:.68rem;min-width:3.2em;text-align:right;color:var(--tx)">100%</span>
         </div>
       </div>
+      <div id="face-pos-ctrl" style="display:none;margin-top:6px">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span class="lbl" style="margin:0;flex-shrink:0;min-width:2.6em">←→</span>
+          <input type="range" id="face-offsetH" min="-200" max="200" value="0" step="2"
+                 style="flex:1;accent-color:var(--ac);cursor:pointer">
+          <button id="btn-resetH" class="btn-sm" style="padding:0 5px;min-width:1.8em" title="Centrer">↺</button>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span class="lbl" style="margin:0;flex-shrink:0;min-width:2.6em">↑↓</span>
+          <input type="range" id="face-offsetV" min="-200" max="200" value="0" step="2"
+                 style="flex:1;accent-color:var(--ac);cursor:pointer">
+          <button id="btn-resetV" class="btn-sm" style="padding:0 5px;min-width:1.8em" title="Centrer">↺</button>
+        </div>
+      </div>
     </div>
     <div class="sep"></div>
     <div id="face-info" style="font-family:'Courier New',monospace;font-size:.55rem;color:var(--mu);line-height:1.7">
@@ -199,6 +213,10 @@ var cameraTarget = {x:0, y:0, z:0};
 var camDist = 300;
 var faceEstSize = 25;      // estimated face size in world units (from auto-detection)
 var manualMode = false;    // manual face placement mode active
+var faceBaseLocalPos = null;   // local position at placement (no offset)
+var faceLocalTangH = null;     // horizontal tangent in head-bone local space
+var faceLocalTangV = null;     // vertical tangent in head-bone local space
+var faceOffsetUnit = 0.005;    // local units per slider unit (set at placement)
 
 var canvas = document.getElementById('c');
 var placeholder = document.getElementById('placeholder');
@@ -871,7 +889,8 @@ function handleManualClick(e) {
 
   var raycaster = new THR.Raycaster();
   raycaster.setFromCamera(new THR.Vector2(ndcX, ndcY), camera);
-  var hits = raycaster.intersectObjects([modelObj], true);
+  var hits = raycaster.intersectObjects([modelObj], true)
+    .filter(function(h) { return h.object !== faceMesh; });
   if (!hits.length) { dbg('Clic manuel: aucune surface touchée — essayez à nouveau'); return; }
 
   var hit = hits[0];
@@ -916,7 +935,7 @@ function placeFaceManual(center, nor, fw, fh) {
     headBone.matrixWorld.decompose(new THR.Vector3(), new THR.Quaternion(), headWS);
     var localW = fw / (headWS.x || 1);
     var localH = fh / (headWS.y || 1);
-    faceEstSize = localW;
+    faceEstSize = fw;  // keep world space for next placement
     dbg('placeFaceManual: fw(world)=' + fw.toFixed(1) + ' ÷ headScale=' + headWS.x.toFixed(2) + ' → localGeo=' + localW.toFixed(2) + ' → worldResult=' + (localW * headWS.x).toFixed(1));
 
     var geo = new THR.PlaneGeometry(localW, localH);
@@ -929,6 +948,17 @@ function placeFaceManual(center, nor, fw, fh) {
     faceMesh.position.copy(localPos);
     faceMesh.quaternion.copy(boneQ.clone().invert().multiply(worldQuat));
     headBone.add(faceMesh);
+
+    // Store base position + face tangents in bone-local space for offset controls
+    faceBaseLocalPos = localPos.clone();
+    faceOffsetUnit = localW / 2 / 100;  // slider 100 → half face width offset
+    var faceNup = Math.abs(nor.y) < 0.9 ? new THR.Vector3(0,1,0) : new THR.Vector3(1,0,0);
+    var tangH_w = faceNup.clone().cross(nor).normalize();
+    var tangV_w = nor.clone().cross(tangH_w).normalize();
+    var invBoneQ = boneQ.clone().invert();
+    faceLocalTangH = tangH_w.applyQuaternion(invBoneQ);
+    faceLocalTangV = tangV_w.applyQuaternion(invBoneQ);
+
     dbg('placeFaceManual: parented to head bone, localPos=(' + localPos.x.toFixed(2) + ',' + localPos.y.toFixed(2) + ',' + localPos.z.toFixed(2) + ') ✓');
   } else {
     var geo = new THR.PlaneGeometry(fw, fh);
@@ -956,6 +986,11 @@ function showFaceSizeCtrl() {
   sl.value = 100;
   val.textContent = '100%';
   if (faceMesh) faceMesh.scale.set(1, 1, 1);
+
+  // Reset offset controls
+  document.getElementById('face-pos-ctrl').style.display = '';
+  document.getElementById('face-offsetH').value = 0;
+  document.getElementById('face-offsetV').value = 0;
 }
 
 document.getElementById('face-size').addEventListener('input', function() {
@@ -965,6 +1000,24 @@ document.getElementById('face-size').addEventListener('input', function() {
     var s = pct / 100;
     faceMesh.scale.set(s, s, 1);
   }
+});
+
+function applyFaceOffset() {
+  if (!faceMesh || !faceBaseLocalPos || !faceLocalTangH || !faceLocalTangV) return;
+  var h = parseInt(document.getElementById('face-offsetH').value);
+  var v = parseInt(document.getElementById('face-offsetV').value);
+  faceMesh.position.copy(faceBaseLocalPos)
+    .addScaledVector(faceLocalTangH, h * faceOffsetUnit)
+    .addScaledVector(faceLocalTangV, v * faceOffsetUnit);
+}
+
+document.getElementById('face-offsetH').addEventListener('input', applyFaceOffset);
+document.getElementById('face-offsetV').addEventListener('input', applyFaceOffset);
+document.getElementById('btn-resetH').addEventListener('click', function() {
+  document.getElementById('face-offsetH').value = 0; applyFaceOffset();
+});
+document.getElementById('btn-resetV').addEventListener('click', function() {
+  document.getElementById('face-offsetV').value = 0; applyFaceOffset();
 });
 
 // ============================================================
