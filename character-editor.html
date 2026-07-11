@@ -109,6 +109,14 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
       </div>
       <div id="face-grid"></div>
       <div id="palette"></div>
+      <div id="face-size-ctrl" style="display:none;margin-top:8px">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="lbl" style="margin:0;flex-shrink:0">Taille</span>
+          <input type="range" id="face-size" min="10" max="400" value="100" step="5"
+                 style="flex:1;accent-color:var(--ac);cursor:pointer">
+          <span id="face-size-val" style="font-family:'Courier New',monospace;font-size:.68rem;min-width:3.2em;text-align:right;color:var(--tx)">100%</span>
+        </div>
+      </div>
     </div>
     <div class="sep"></div>
     <div id="face-info" style="font-family:'Courier New',monospace;font-size:.55rem;color:var(--mu);line-height:1.7">
@@ -667,33 +675,39 @@ function detectFaceArea(obj) {
   faceTex.minFilter = THR.NearestFilter;
 
   var faceMat = new THR.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, side: THR.DoubleSide });
-  var faceGeo = new THR.PlaneGeometry(faceW, faceH);
-  faceMesh = new THR.Mesh(faceGeo, faceMat);
-
-  // Orient the plane to face domNor in world space
   var worldPlaneQuat = new THR.Quaternion().setFromUnitVectors(new THR.Vector3(0,0,1), domNor);
 
   if (headBone) {
     headBone.updateMatrixWorld(true);
+    // faceW/faceH are in WORLD space — divide by head bone world scale to get LOCAL space geometry
+    var headWS = new THR.Vector3();
+    headBone.matrixWorld.decompose(new THR.Vector3(), new THR.Quaternion(), headWS);
+    var localW = faceW / (headWS.x || 1);
+    var localH = faceH / (headWS.y || 1);
+    dbg('headWorldScale=' + headWS.x.toFixed(2) + ' → localGeo=' + localW.toFixed(2) + 'x' + localH.toFixed(2));
+    faceEstSize = localW; // store local-space size for slider reference
+
+    var faceGeo = new THR.PlaneGeometry(localW, localH);
+    faceMesh = new THR.Mesh(faceGeo, faceMat);
+
     var headWorldInv = headBone.matrixWorld.clone().invert();
     var localPos = new THR.Vector3(faceCX, faceCY, faceCZ).applyMatrix4(headWorldInv);
-
-    // Convert world-space orientation → head-bone local space
     var boneWorldQuat = new THR.Quaternion();
     headBone.getWorldQuaternion(boneWorldQuat);
     faceMesh.quaternion.copy(boneWorldQuat.clone().invert().multiply(worldPlaneQuat));
-
-    dbg('Face local pos in head: (' + localPos.x.toFixed(1) + ',' + localPos.y.toFixed(1) + ',' + localPos.z.toFixed(1) + ')');
     faceMesh.position.copy(localPos);
     headBone.add(faceMesh);
-    dbg('Face plane parented to head bone ✓');
+    dbg('Face local pos=(' + localPos.x.toFixed(2) + ',' + localPos.y.toFixed(2) + ',' + localPos.z.toFixed(2) + ') → head bone ✓');
   } else {
+    var faceGeo = new THR.PlaneGeometry(faceW, faceH);
+    faceMesh = new THR.Mesh(faceGeo, faceMat);
     faceMesh.quaternion.copy(worldPlaneQuat);
     faceMesh.position.set(faceCX, faceCY, faceCZ);
     scene.add(faceMesh);
-    dbg('Face plane placed in world space (no head bone)');
+    dbg('Face plane in world space (no head bone)');
   }
 
+  showFaceSizeCtrl();
   drawFaceTex();
   dbg('=== DONE ===');
 }
@@ -877,7 +891,6 @@ function handleManualClick(e) {
 }
 
 function placeFaceManual(center, nor, fw, fh) {
-  dbg('placeFaceManual: size=' + fw.toFixed(1) + 'x' + fh.toFixed(1));
   if (faceMesh) { if (faceMesh.parent) faceMesh.parent.remove(faceMesh); faceMesh = null; }
 
   faceCanvas = document.createElement('canvas');
@@ -887,48 +900,71 @@ function placeFaceManual(center, nor, fw, fh) {
   faceTex.minFilter = THR.NearestFilter;
 
   var mat = new THR.MeshBasicMaterial({ map: faceTex, transparent: true, depthWrite: false, side: THR.DoubleSide });
-  var geo = new THR.PlaneGeometry(fw, fh);
-  faceMesh = new THR.Mesh(geo, mat);
-
-  // Orient plane: default +Z normal → rotate to face worldNormal
   var worldQuat = new THR.Quaternion().setFromUnitVectors(new THR.Vector3(0,0,1), nor);
-
-  // Push slightly outward to avoid z-fighting
   var placePt = center.clone().addScaledVector(nor, 1.0);
 
-  // Parent to head bone so face follows animation
   var headBone = null;
   var headNames = ['mixamorigHead','Head','head','mixamorig:Head'];
-  if (modelObj) {
-    modelObj.traverse(function(n) {
-      if (!headBone && headNames.indexOf(n.name) !== -1) headBone = n;
-    });
-  }
+  if (modelObj) modelObj.traverse(function(n) {
+    if (!headBone && headNames.indexOf(n.name) !== -1) headBone = n;
+  });
 
   if (headBone) {
     headBone.updateMatrixWorld(true);
+    // fw/fh are world-space sizes → convert to head-bone local space
+    var headWS = new THR.Vector3();
+    headBone.matrixWorld.decompose(new THR.Vector3(), new THR.Quaternion(), headWS);
+    var localW = fw / (headWS.x || 1);
+    var localH = fh / (headWS.y || 1);
+    faceEstSize = localW;
+    dbg('placeFaceManual: worldSize=' + fw.toFixed(1) + ' headScale=' + headWS.x.toFixed(2) + ' localGeo=' + localW.toFixed(2));
+
+    var geo = new THR.PlaneGeometry(localW, localH);
+    faceMesh = new THR.Mesh(geo, mat);
+
     var invHead = headBone.matrixWorld.clone().invert();
     var localPos = placePt.clone().applyMatrix4(invHead);
     var boneQ = new THR.Quaternion();
     headBone.getWorldQuaternion(boneQ);
-    var localQ = boneQ.clone().invert().multiply(worldQuat);
     faceMesh.position.copy(localPos);
-    faceMesh.quaternion.copy(localQ);
+    faceMesh.quaternion.copy(boneQ.clone().invert().multiply(worldQuat));
     headBone.add(faceMesh);
-    dbg('placeFaceManual: parented to head bone ✓');
+    dbg('placeFaceManual: parented to head bone, localPos=(' + localPos.x.toFixed(2) + ',' + localPos.y.toFixed(2) + ',' + localPos.z.toFixed(2) + ') ✓');
   } else {
+    var geo = new THR.PlaneGeometry(fw, fh);
+    faceMesh = new THR.Mesh(geo, mat);
     faceMesh.position.copy(placePt);
     faceMesh.quaternion.copy(worldQuat);
     scene.add(faceMesh);
-    dbg('placeFaceManual: world space (no head bone found)');
+    dbg('placeFaceManual: world space (no head bone)');
   }
 
+  showFaceSizeCtrl();
   drawFaceTex();
 }
 
 document.getElementById('btn-place-face').addEventListener('click', function() {
   if (!modelObj) { dbg('Chargez d\'abord un modèle FBX'); return; }
   setManualMode(!manualMode);
+});
+
+function showFaceSizeCtrl() {
+  var ctrl = document.getElementById('face-size-ctrl');
+  var sl   = document.getElementById('face-size');
+  var val  = document.getElementById('face-size-val');
+  ctrl.style.display = '';
+  sl.value = 100;
+  val.textContent = '100%';
+  if (faceMesh) faceMesh.scale.set(1, 1, 1);
+}
+
+document.getElementById('face-size').addEventListener('input', function() {
+  var pct = parseInt(this.value);
+  document.getElementById('face-size-val').textContent = pct + '%';
+  if (faceMesh) {
+    var s = pct / 100;
+    faceMesh.scale.set(s, s, 1);
+  }
 });
 
 // ============================================================
