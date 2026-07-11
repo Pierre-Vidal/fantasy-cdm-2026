@@ -421,19 +421,23 @@ function detectFaceArea(obj) {
   var headBone = null;
   var headBoneIdx = -1;
   var headNames = ['mixamorigHead','Head','head','mixamorig:Head'];
+  var skeletonRef = null;
 
   obj.traverse(function(node) {
     if (!headBone && headNames.indexOf(node.name) !== -1) headBone = node;
-    if (headBoneIdx < 0 && node.isSkinnedMesh && node.skeleton) {
+    if (!skeletonRef && node.isSkinnedMesh && node.skeleton) {
+      skeletonRef = node.skeleton;
+      // Log first 15 skeleton bones so we can verify index mapping
+      dbg('Skeleton[0..14]: ' + node.skeleton.bones.slice(0,15).map(function(b,i){ return i+'='+b.name.replace('mixamorig',''); }).join(' '));
       node.skeleton.bones.forEach(function(b, i) {
         if (headBoneIdx < 0 && headNames.indexOf(b.name) !== -1) {
           headBoneIdx = i;
-          dbg('Skeleton head bone "' + b.name + '" = idx ' + i);
+          dbg('Head bone "' + b.name + '" = skeleton idx ' + i);
         }
       });
     }
   });
-  dbg('Head bone: ' + (headBone ? headBone.name : 'NOT FOUND'));
+  dbg('Head bone scene node: ' + (headBone ? headBone.name : 'NOT FOUND'));
 
   // 2. Scan meshes: collect white vertices as {pos, nor}
   var candidates = [];
@@ -484,58 +488,85 @@ function detectFaceArea(obj) {
 
     if (!whiteSet.length) return;
 
-    // 3a. Diagnose skin attribute type
-    if (hasSkin && whiteSet.length > 0) {
-      var vi0 = whiteSet[0];
-      try {
-        dbg('  skinIdx type=' + skinIdx.constructor.name + ' itemSize=' + skinIdx.itemSize +
-            ' normalized=' + skinIdx.normalized);
-        dbg('  sample vert ' + vi0 + ' skinIdx=[' +
-          skinIdx.getX(vi0) + ',' + skinIdx.getY(vi0) + ',' +
-          skinIdx.getZ(vi0) + ',' + skinIdx.getW(vi0) + ']' +
-          ' skinWgt=[' + skinWgt.getX(vi0).toFixed(2) + ',' + skinWgt.getY(vi0).toFixed(2) + ',' +
-          skinWgt.getZ(vi0).toFixed(2) + ',' + skinWgt.getW(vi0).toFixed(2) + ']');
-      } catch(e) { dbg('  skinIdx sample error: ' + e.message); }
-    }
-
-    // 3b. Filter by head bone skinWeight using getX/Y/Z/W (getComponent crashes on some attr types)
+    // 3a. Tally dominant bone indices among white verts (detects if Mixamo mis-assigned face)
     var headVerts = whiteSet;
     if (hasSkin) {
       try {
+        var boneTotals = {};
+        whiteSet.forEach(function(vi) {
+          var pairs = [
+            [Math.round(skinIdx.getX(vi)), skinWgt.getX(vi)],
+            [Math.round(skinIdx.getY(vi)), skinWgt.getY(vi)],
+            [Math.round(skinIdx.getZ(vi)), skinWgt.getZ(vi)],
+            [Math.round(skinIdx.getW(vi)), skinWgt.getW(vi)]
+          ];
+          pairs.forEach(function(p) {
+            if (p[1] > 0.01) { boneTotals[p[0]] = (boneTotals[p[0]]||0) + p[1]; }
+          });
+        });
+        var sortedBones = Object.keys(boneTotals).sort(function(a,b){ return boneTotals[b]-boneTotals[a]; });
+        dbg('  Top bones among white verts: ' + sortedBones.slice(0,6).map(function(k){
+          var name = skeletonRef ? skeletonRef.bones[k].name.replace('mixamorig','') : '?';
+          return 'b'+k+'('+name+')='+boneTotals[k].toFixed(0);
+        }).join(' '));
+
+        // If headBoneIdx is not in the top bones, adopt the highest-Y bone as head candidate
+        var topBoneIdx = parseInt(sortedBones[0]);
+        if (skeletonRef && sortedBones.indexOf(String(headBoneIdx)) > 2) {
+          // headBoneIdx ranks poorly — find the bone among top 5 whose scene node has highest Y
+          var bestIdx = headBoneIdx;
+          var bestY = -Infinity;
+          sortedBones.slice(0,5).forEach(function(k) {
+            var b = skeletonRef ? skeletonRef.bones[parseInt(k)] : null;
+            if (!b) return;
+            var wp2 = new THR.Vector3();
+            b.updateMatrixWorld(true);
+            b.getWorldPosition(wp2);
+            if (wp2.y > bestY) { bestY = wp2.y; bestIdx = parseInt(k); }
+          });
+          if (bestIdx !== headBoneIdx) {
+            dbg('  headBoneIdx adjusted: ' + headBoneIdx + ' → ' + bestIdx +
+                ' (' + (skeletonRef.bones[bestIdx] ? skeletonRef.bones[bestIdx].name : '?') + ')');
+            headBoneIdx = bestIdx;
+          }
+        }
+
+        // 3b. Filter by (possibly adjusted) head bone index
         headVerts = whiteSet.filter(function(vi) {
           var b0 = Math.round(skinIdx.getX(vi)), b1 = Math.round(skinIdx.getY(vi));
           var b2 = Math.round(skinIdx.getZ(vi)), b3 = Math.round(skinIdx.getW(vi));
           var w0 = skinWgt.getX(vi), w1 = skinWgt.getY(vi);
           var w2 = skinWgt.getZ(vi), w3 = skinWgt.getW(vi);
-          return (b0 === headBoneIdx && w0 > 0.15) || (b1 === headBoneIdx && w1 > 0.15) ||
-                 (b2 === headBoneIdx && w2 > 0.15) || (b3 === headBoneIdx && w3 > 0.15);
+          return (b0 === headBoneIdx && w0 > 0.10) || (b1 === headBoneIdx && w1 > 0.10) ||
+                 (b2 === headBoneIdx && w2 > 0.10) || (b3 === headBoneIdx && w3 > 0.10);
         });
-        dbg('  After skinWeight filter: ' + headVerts.length + ' / ' + whiteSet.length);
+        dbg('  After skinWeight filter (bone' + headBoneIdx + '): ' + headVerts.length + ' / ' + whiteSet.length);
       } catch(e) {
-        dbg('  skinWeight filter ERROR: ' + e.message + ' — using proximity fallback');
-        headVerts = null;
+        dbg('  skinWeight filter ERROR: ' + e.message);
+        headVerts = [];
       }
     }
 
-    // 3c. Fallback: filter white verts by proximity to head bone world position
-    if (!headVerts || !headVerts.length) {
-      if (headBone) {
-        headBone.updateMatrixWorld(true);
-        var headWP = new THR.Vector3();
-        headBone.getWorldPosition(headWP);
-        var headR = 35; // ~22% of normalized height 160
-        dbg('  Proximity fallback: head at (' + headWP.x.toFixed(1) + ',' + headWP.y.toFixed(1) + ',' + headWP.z.toFixed(1) + ') r=' + headR);
-        headVerts = whiteSet.filter(function(vi) {
-          var wp = new THR.Vector3(positions.getX(vi), positions.getY(vi), positions.getZ(vi));
-          wp.applyMatrix4(node.matrixWorld);
-          return wp.distanceTo(headWP) < headR;
-        });
-        dbg('  After proximity filter: ' + headVerts.length + ' / ' + whiteSet.length);
-      }
-      if (!headVerts || !headVerts.length) {
-        headVerts = whiteSet;
-        dbg('  No filter succeeded — using all ' + whiteSet.length + ' white verts');
-      }
+    // 3c. Proximity augmentation: if bone weight gives too few verts, use distance to head bone
+    //     (happens when Mixamo assigns face verts to root/hips instead of head)
+    if (headVerts.length < 100 && headBone) {
+      headBone.updateMatrixWorld(true);
+      var headWP = new THR.Vector3();
+      headBone.getWorldPosition(headWP);
+      var headR = 38; // units in normalized world (~24% of height 160)
+      dbg('  Proximity filter: head at (' + headWP.x.toFixed(1) + ',' + headWP.y.toFixed(1) + ',' + headWP.z.toFixed(1) + ') r=' + headR);
+      var proxVerts = whiteSet.filter(function(vi) {
+        var wp = new THR.Vector3(positions.getX(vi), positions.getY(vi), positions.getZ(vi));
+        wp.applyMatrix4(node.matrixWorld);
+        return wp.distanceTo(headWP) < headR;
+      });
+      dbg('  Proximity: ' + proxVerts.length + ' verts (bone weight had ' + headVerts.length + ')');
+      if (proxVerts.length > headVerts.length) headVerts = proxVerts;
+    }
+
+    if (!headVerts.length) {
+      headVerts = whiteSet;
+      dbg('  All filters gave 0 — using all ' + whiteSet.length + ' white verts (last resort)');
     }
 
     // 3d. Collect world-space pos + normal for survivors
