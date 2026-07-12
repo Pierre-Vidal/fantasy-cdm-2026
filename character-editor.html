@@ -35,6 +35,11 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
 .sep{height:1px;background:var(--bd)}
 .btn-sm{background:transparent;border:1px solid var(--bd);border-radius:5px;color:var(--mu);font-family:'Courier New',monospace;font-size:.55rem;letter-spacing:.1em;text-transform:uppercase;padding:5px 8px;cursor:pointer;transition:all .13s}
 .btn-sm:hover{border-color:var(--ac);color:var(--ac)}
+.mat-row{display:flex;align-items:center;gap:8px}
+.mat-name{flex:1;font-family:'Courier New',monospace;font-size:.62rem;color:var(--tx);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mat-swatch{width:26px;height:26px;border-radius:5px;border:1.5px solid var(--bd);cursor:pointer;padding:0;background:none;flex-shrink:0}
+.mat-swatch::-webkit-color-swatch-wrapper{padding:0}
+.mat-swatch::-webkit-color-swatch{border:none;border-radius:4px}
 #face-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:1px;background:var(--bd);border:1.5px solid var(--bd);border-radius:5px;overflow:hidden;cursor:crosshair;user-select:none}
 .px{aspect-ratio:1;background:var(--ct)}.px:hover{filter:brightness(1.5)}
 #palette{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-top:4px}
@@ -99,6 +104,11 @@ input[type=number]{font-size:1.8rem;font-weight:700;text-align:center}
       <input type="number" id="inp-num" value="10" min="1" max="99">
     </div>
     <div class="sep"></div>
+    <div class="ctrl" id="mat-colors-ctrl" style="display:none">
+      <div class="lbl">Couleurs du modèle</div>
+      <div id="mat-colors-list" style="display:flex;flex-direction:column;gap:6px"></div>
+    </div>
+    <div class="sep" id="mat-colors-sep" style="display:none"></div>
     <div class="ctrl">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
         <div class="lbl" style="margin:0">Visage 12&times;12</div>
@@ -437,6 +447,8 @@ function setupModel(obj) {
   scene.add(obj);
   modelObj = obj;
 
+  buildMatColorPanel(obj);
+
   // Show manual placement button now that a model is loaded
   document.getElementById('btn-place-face').style.display = '';
 
@@ -459,6 +471,62 @@ function setupModel(obj) {
   // Fallback : retry à 1s et 3s
   setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 1000);
   setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 3000);
+}
+
+// ============================================================
+// MATERIAL COLOR PANEL
+// ============================================================
+function buildMatColorPanel(obj) {
+  var uniqueMats = [];
+  var seen = new Set();
+
+  obj.traverse(function(node) {
+    if (!node.isMesh && !node.isSkinnedMesh) return;
+    var mats = Array.isArray(node.material) ? node.material : [node.material];
+    mats.forEach(function(m) {
+      if (!m || !m.color || seen.has(m.uuid)) return;
+      seen.add(m.uuid);
+      uniqueMats.push(m);
+    });
+  });
+
+  dbg('Matériaux détectés: ' + uniqueMats.length + ' → ' + uniqueMats.map(function(m){ return m.name || '(sans nom)'; }).join(', '));
+
+  var list = document.getElementById('mat-colors-list');
+  var ctrl = document.getElementById('mat-colors-ctrl');
+  var sep  = document.getElementById('mat-colors-sep');
+  list.innerHTML = '';
+
+  if (!uniqueMats.length) {
+    ctrl.style.display = 'none';
+    sep.style.display = 'none';
+    return;
+  }
+
+  uniqueMats.forEach(function(m, i) {
+    var row = document.createElement('div');
+    row.className = 'mat-row';
+
+    var name = document.createElement('div');
+    name.className = 'mat-name';
+    name.textContent = m.name || ('Matériau ' + (i + 1));
+    name.title = name.textContent;
+
+    var input = document.createElement('input');
+    input.type = 'color';
+    input.className = 'mat-swatch';
+    input.value = '#' + m.color.getHexString();
+    input.addEventListener('input', function() {
+      m.color.set(input.value);
+    });
+
+    row.appendChild(name);
+    row.appendChild(input);
+    list.appendChild(row);
+  });
+
+  ctrl.style.display = '';
+  sep.style.display = '';
 }
 
 // ============================================================
