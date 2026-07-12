@@ -486,20 +486,42 @@ function setupModel(obj) {
 // matériaux séparés. On scanne les couleurs réellement présentes et on
 // permet de remplacer chacune indépendamment, partout où elle apparaît.
 // ============================================================
-var paletteEntries = []; // [{ hex, targets: [{ node, kind:'vertex'|'uv', ... }] }]
-
-function quantizeColor(r, g, b) {
-  // Regroupe les couleurs proches (anti-aliasing, compression) par pas de 8/255
-  var STEP = 8;
-  var qr = Math.min(255, Math.round(r * 255 / STEP) * STEP);
-  var qg = Math.min(255, Math.round(g * 255 / STEP) * STEP);
-  var qb = Math.min(255, Math.round(b * 255 / STEP) * STEP);
-  return ((qr << 16) | (qg << 8) | qb);
+function hexStr255(r255, g255, b255) {
+  return '#' + [r255, g255, b255].map(function(v) {
+    return ('0' + Math.round(v).toString(16)).slice(-2);
+  }).join('');
 }
-function hexStr(n) { return '#' + ('000000' + n.toString(16)).slice(-6); }
+
+// Regroupe par proximité réelle (distance euclidienne en RGB 0-255) plutôt que
+// par arrondi indépendant par canal — évite qu'une même couleur logique éclate
+// en dizaines de nuances à cause du bruit de compression/anti-aliasing.
+var CLUSTER_DIST = 18; // seuil de fusion, en distance RGB 0-255
+var MAX_CLUSTERS_SCAN = 200; // au-delà, on arrête de créer de nouveaux clusters (garde-fou perf)
+function addToClusters(clusters, r, g, b) {
+  var r255 = r * 255, g255 = g * 255, b255 = b * 255;
+  var bestI = -1, bestD = Infinity;
+  for (var i = 0; i < clusters.length; i++) {
+    var c = clusters[i];
+    var mr = c.sumR / c.count, mg = c.sumG / c.count, mb = c.sumB / c.count;
+    var d = Math.sqrt((r255-mr)*(r255-mr) + (g255-mg)*(g255-mg) + (b255-mb)*(b255-mb));
+    if (d < bestD) { bestD = d; bestI = i; }
+  }
+  if (bestI >= 0 && bestD <= CLUSTER_DIST) {
+    var bc = clusters[bestI];
+    bc.sumR += r255; bc.sumG += g255; bc.sumB += b255; bc.count++;
+    return;
+  }
+  if (clusters.length < MAX_CLUSTERS_SCAN) {
+    clusters.push({ sumR: r255, sumG: g255, sumB: b255, count: 1 });
+  } else if (bestI >= 0) {
+    // Trop de clusters déjà créés : rattache au plus proche malgré tout
+    var fc = clusters[bestI];
+    fc.sumR += r255; fc.sumG += g255; fc.sumB += b255; fc.count++;
+  }
+}
 
 function buildMatColorPanel(obj) {
-  var palette = {}; // quantized int → { r,g,b (first sample), count }
+  var clusters = [];
 
   obj.traverse(function(node) {
     if (!node.isMesh && !node.isSkinnedMesh) return;
@@ -509,10 +531,7 @@ function buildMatColorPanel(obj) {
     if (geo.attributes.color) {
       var cols = geo.attributes.color;
       for (var i = 0; i < cols.count; i++) {
-        var r = cols.getX(i), g = cols.getY(i), b = cols.getZ(i);
-        var key = quantizeColor(r, g, b);
-        if (!palette[key]) palette[key] = { r: r, g: g, b: b, count: 0 };
-        palette[key].count++;
+        addToClusters(clusters, cols.getX(i), cols.getY(i), cols.getZ(i));
       }
     } else if (geo.attributes.uv) {
       var mats = Array.isArray(node.material) ? node.material : [node.material];
@@ -526,21 +545,24 @@ function buildMatColorPanel(obj) {
         var pd = pctx.getImageData(0, 0, img.width, img.height).data;
         for (var pi = 0; pi < pd.length; pi += 4) {
           if (pd[pi + 3] < 10) continue; // pixel transparent, ignoré
-          var r2 = pd[pi] / 255, g2 = pd[pi + 1] / 255, b2 = pd[pi + 2] / 255;
-          var key2 = quantizeColor(r2, g2, b2);
-          if (!palette[key2]) palette[key2] = { r: r2, g: g2, b: b2, count: 0 };
-          palette[key2].count++;
+          addToClusters(clusters, pd[pi] / 255, pd[pi + 1] / 255, pd[pi + 2] / 255);
         }
       });
     }
   });
 
-  var sorted = Object.keys(palette)
-    .map(function(k) { return { key: parseInt(k), info: palette[k] }; })
-    .sort(function(a, b) { return b.info.count - a.info.count; })
-    .slice(0, 24); // évite un panel à rallonge sur des textures très détaillées
+  // Ignore les clusters trop marginaux (bruit ponctuel entre deux vraies couleurs)
+  var totalSamples = clusters.reduce(function(s, c) { return s + c.count; }, 0);
+  var MIN_SHARE = 0.015; // 1.5% des pixels/vertices scannés minimum (filtre le bruit de bordure)
+  var sorted = clusters
+    .filter(function(c) { return c.count / totalSamples >= MIN_SHARE; })
+    .sort(function(a, b) { return b.count - a.count; })
+    .slice(0, 16)
+    .map(function(c) {
+      return { hex: hexStr255(c.sumR / c.count, c.sumG / c.count, c.sumB / c.count), count: c.count };
+    });
 
-  dbg('Palette voxel détectée: ' + sorted.length + ' couleurs (top ' + sorted.map(function(s){ return hexStr(s.key); }).join(',') + ')');
+  dbg('Palette voxel détectée: ' + sorted.length + ' couleurs (' + clusters.length + ' clusters bruts) → ' + sorted.map(function(s){ return s.hex; }).join(','));
 
   var list = document.getElementById('mat-colors-list');
   var ctrl = document.getElementById('mat-colors-ctrl');
@@ -564,9 +586,9 @@ function buildMatColorPanel(obj) {
     var input = document.createElement('input');
     input.type = 'color';
     input.className = 'mat-swatch';
-    input.value = hexStr(entry.key);
+    input.value = entry.hex;
     input.addEventListener('input', function() {
-      recolorPaletteEntry(obj, entry.info, input.value);
+      recolorPaletteEntry(obj, entry.hex, input.value);
     });
 
     row.appendChild(name);
@@ -578,7 +600,14 @@ function buildMatColorPanel(obj) {
   sep.style.display = '';
 }
 
-function recolorPaletteEntry(obj, originalInfo, newHex) {
+function colorDist255(r255, g255, b255, hex) {
+  var tr = parseInt(hex.substr(1, 2), 16);
+  var tg = parseInt(hex.substr(3, 2), 16);
+  var tb = parseInt(hex.substr(5, 2), 16);
+  return Math.sqrt((r255-tr)*(r255-tr) + (g255-tg)*(g255-tg) + (b255-tb)*(b255-tb));
+}
+
+function recolorPaletteEntry(obj, originalHex, newHex) {
   var nr = parseInt(newHex.substr(1, 2), 16) / 255;
   var ng = parseInt(newHex.substr(3, 2), 16) / 255;
   var nb = parseInt(newHex.substr(5, 2), 16) / 255;
@@ -592,8 +621,8 @@ function recolorPaletteEntry(obj, originalInfo, newHex) {
       var cols = geo.attributes.color;
       var changed = false;
       for (var i = 0; i < cols.count; i++) {
-        var key = quantizeColor(cols.getX(i), cols.getY(i), cols.getZ(i));
-        if (key === quantizeColor(originalInfo.r, originalInfo.g, originalInfo.b)) {
+        var r255 = cols.getX(i) * 255, g255 = cols.getY(i) * 255, b255 = cols.getZ(i) * 255;
+        if (colorDist255(r255, g255, b255, originalHex) <= CLUSTER_DIST) {
           cols.setXYZ(i, nr, ng, nb);
           changed = true;
         }
@@ -614,12 +643,10 @@ function recolorPaletteEntry(obj, originalInfo, newHex) {
         var w = mat.map.__editCanvas.width, h = mat.map.__editCanvas.height;
         var id = ectx.getImageData(0, 0, w, h);
         var pd = id.data;
-        var targetKey = quantizeColor(originalInfo.r, originalInfo.g, originalInfo.b);
         var changed = false;
         for (var pi = 0; pi < pd.length; pi += 4) {
           if (pd[pi + 3] < 10) continue;
-          var key2 = quantizeColor(pd[pi] / 255, pd[pi + 1] / 255, pd[pi + 2] / 255);
-          if (key2 === targetKey) {
+          if (colorDist255(pd[pi], pd[pi + 1], pd[pi + 2], originalHex) <= CLUSTER_DIST) {
             pd[pi] = Math.round(nr * 255); pd[pi + 1] = Math.round(ng * 255); pd[pi + 2] = Math.round(nb * 255);
             changed = true;
           }
