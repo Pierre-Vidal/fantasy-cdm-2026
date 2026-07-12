@@ -474,50 +474,93 @@ function setupModel(obj) {
 }
 
 // ============================================================
-// MATERIAL COLOR PANEL
+// VOXEL PALETTE COLOR PANEL
+// Modèles MagicaVoxel/voxel : la couleur vit dans les vertex colors ou
+// dans la texture UV (un pixel = une couleur de palette), pas dans des
+// matériaux séparés. On scanne les couleurs réellement présentes et on
+// permet de remplacer chacune indépendamment, partout où elle apparaît.
 // ============================================================
+var paletteEntries = []; // [{ hex, targets: [{ node, kind:'vertex'|'uv', ... }] }]
+
+function quantizeColor(r, g, b) {
+  // Regroupe les couleurs proches (anti-aliasing, compression) par pas de 8/255
+  var STEP = 8;
+  var qr = Math.min(255, Math.round(r * 255 / STEP) * STEP);
+  var qg = Math.min(255, Math.round(g * 255 / STEP) * STEP);
+  var qb = Math.min(255, Math.round(b * 255 / STEP) * STEP);
+  return ((qr << 16) | (qg << 8) | qb);
+}
+function hexStr(n) { return '#' + ('000000' + n.toString(16)).slice(-6); }
+
 function buildMatColorPanel(obj) {
-  var uniqueMats = [];
-  var seen = new Set();
+  var palette = {}; // quantized int → { r,g,b (first sample), count }
 
   obj.traverse(function(node) {
     if (!node.isMesh && !node.isSkinnedMesh) return;
-    var mats = Array.isArray(node.material) ? node.material : [node.material];
-    mats.forEach(function(m) {
-      if (!m || !m.color || seen.has(m.uuid)) return;
-      seen.add(m.uuid);
-      uniqueMats.push(m);
-    });
+    var geo = node.geometry;
+    if (!geo) return;
+
+    if (geo.attributes.color) {
+      var cols = geo.attributes.color;
+      for (var i = 0; i < cols.count; i++) {
+        var r = cols.getX(i), g = cols.getY(i), b = cols.getZ(i);
+        var key = quantizeColor(r, g, b);
+        if (!palette[key]) palette[key] = { r: r, g: g, b: b, count: 0 };
+        palette[key].count++;
+      }
+    } else if (geo.attributes.uv) {
+      var mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach(function(mat) {
+        if (!mat || !mat.map || !mat.map.image) return;
+        var img = mat.map.image;
+        var pc = document.createElement('canvas');
+        pc.width = img.width; pc.height = img.height;
+        var pctx = pc.getContext('2d');
+        pctx.drawImage(img, 0, 0);
+        var pd = pctx.getImageData(0, 0, img.width, img.height).data;
+        for (var pi = 0; pi < pd.length; pi += 4) {
+          if (pd[pi + 3] < 10) continue; // pixel transparent, ignoré
+          var r2 = pd[pi] / 255, g2 = pd[pi + 1] / 255, b2 = pd[pi + 2] / 255;
+          var key2 = quantizeColor(r2, g2, b2);
+          if (!palette[key2]) palette[key2] = { r: r2, g: g2, b: b2, count: 0 };
+          palette[key2].count++;
+        }
+      });
+    }
   });
 
-  dbg('Matériaux détectés: ' + uniqueMats.length + ' → ' + uniqueMats.map(function(m){ return m.name || '(sans nom)'; }).join(', '));
+  var sorted = Object.keys(palette)
+    .map(function(k) { return { key: parseInt(k), info: palette[k] }; })
+    .sort(function(a, b) { return b.info.count - a.info.count; })
+    .slice(0, 24); // évite un panel à rallonge sur des textures très détaillées
+
+  dbg('Palette voxel détectée: ' + sorted.length + ' couleurs (top ' + sorted.map(function(s){ return hexStr(s.key); }).join(',') + ')');
 
   var list = document.getElementById('mat-colors-list');
   var ctrl = document.getElementById('mat-colors-ctrl');
   var sep  = document.getElementById('mat-colors-sep');
   list.innerHTML = '';
 
-  if (!uniqueMats.length) {
+  if (!sorted.length) {
     ctrl.style.display = 'none';
     sep.style.display = 'none';
     return;
   }
 
-  uniqueMats.forEach(function(m, i) {
+  sorted.forEach(function(entry, i) {
     var row = document.createElement('div');
     row.className = 'mat-row';
 
     var name = document.createElement('div');
     name.className = 'mat-name';
-    name.textContent = m.name || ('Matériau ' + (i + 1));
-    name.title = name.textContent;
+    name.textContent = 'Couleur ' + (i + 1);
 
     var input = document.createElement('input');
     input.type = 'color';
     input.className = 'mat-swatch';
-    input.value = '#' + m.color.getHexString();
+    input.value = hexStr(entry.key);
     input.addEventListener('input', function() {
-      m.color.set(input.value);
+      recolorPaletteEntry(obj, entry.info, input.value);
     });
 
     row.appendChild(name);
@@ -527,6 +570,62 @@ function buildMatColorPanel(obj) {
 
   ctrl.style.display = '';
   sep.style.display = '';
+}
+
+function recolorPaletteEntry(obj, originalInfo, newHex) {
+  var nr = parseInt(newHex.substr(1, 2), 16) / 255;
+  var ng = parseInt(newHex.substr(3, 2), 16) / 255;
+  var nb = parseInt(newHex.substr(5, 2), 16) / 255;
+
+  obj.traverse(function(node) {
+    if (!node.isMesh && !node.isSkinnedMesh) return;
+    var geo = node.geometry;
+    if (!geo) return;
+
+    if (geo.attributes.color) {
+      var cols = geo.attributes.color;
+      var changed = false;
+      for (var i = 0; i < cols.count; i++) {
+        var key = quantizeColor(cols.getX(i), cols.getY(i), cols.getZ(i));
+        if (key === quantizeColor(originalInfo.r, originalInfo.g, originalInfo.b)) {
+          cols.setXYZ(i, nr, ng, nb);
+          changed = true;
+        }
+      }
+      if (changed) cols.needsUpdate = true;
+    } else if (geo.attributes.uv) {
+      var mats = Array.isArray(node.material) ? node.material : [node.material];
+      mats.forEach(function(mat) {
+        if (!mat || !mat.map || !mat.map.image) return;
+        var img = mat.map.image;
+        if (!mat.map.__editCanvas) {
+          var pc = document.createElement('canvas');
+          pc.width = img.width; pc.height = img.height;
+          pc.getContext('2d').drawImage(img, 0, 0);
+          mat.map.__editCanvas = pc;
+        }
+        var ectx = mat.map.__editCanvas.getContext('2d');
+        var w = mat.map.__editCanvas.width, h = mat.map.__editCanvas.height;
+        var id = ectx.getImageData(0, 0, w, h);
+        var pd = id.data;
+        var targetKey = quantizeColor(originalInfo.r, originalInfo.g, originalInfo.b);
+        var changed = false;
+        for (var pi = 0; pi < pd.length; pi += 4) {
+          if (pd[pi + 3] < 10) continue;
+          var key2 = quantizeColor(pd[pi] / 255, pd[pi + 1] / 255, pd[pi + 2] / 255);
+          if (key2 === targetKey) {
+            pd[pi] = Math.round(nr * 255); pd[pi + 1] = Math.round(ng * 255); pd[pi + 2] = Math.round(nb * 255);
+            changed = true;
+          }
+        }
+        if (changed) {
+          ectx.putImageData(id, 0, 0);
+          mat.map.image = mat.map.__editCanvas;
+          mat.map.needsUpdate = true;
+        }
+      });
+    }
+  });
 }
 
 // ============================================================
