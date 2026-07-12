@@ -447,8 +447,6 @@ function setupModel(obj) {
   scene.add(obj);
   modelObj = obj;
 
-  buildMatColorPanel(obj);
-
   // Show manual placement button now that a model is loaded
   document.getElementById('btn-place-face').style.display = '';
 
@@ -460,17 +458,25 @@ function setupModel(obj) {
 
   mixer = new THR.AnimationMixer(obj);
 
+  // La texture (mat.map.image) peut ne pas être encore chargée à ce stade —
+  // on réessaie face + palette à chaque signal de chargement, comme pour le visage.
+  function detectAll() {
+    if (!modelObj) return;
+    detectFaceArea(modelObj);
+    buildMatColorPanel(modelObj);
+  }
+
   // Essai immédiat (si les textures sont deja dispo)
-  detectFaceArea(obj);
+  detectAll();
 
   // Retry quand toutes les textures async sont chargées
   THR.DefaultLoadingManager.onLoad = function() {
-    dbg('DefaultLoadingManager.onLoad → retry face detection');
-    if (modelObj) detectFaceArea(modelObj);
+    dbg('DefaultLoadingManager.onLoad → retry face+palette detection');
+    detectAll();
   };
   // Fallback : retry à 1s et 3s
-  setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 1000);
-  setTimeout(function(){ if(modelObj) detectFaceArea(modelObj); }, 3000);
+  setTimeout(detectAll, 1000);
+  setTimeout(detectAll, 3000);
 }
 
 // ============================================================
