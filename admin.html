@@ -55,6 +55,14 @@
       </div>
       <div id="reset-fixture-result" style="font-size:0.78rem"></div>
 
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🤫 Verrou du site</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">
+        Quand activé, toutes les pages publiques affichent un écran de suspense au lieu de leur contenu (scores/classements cachés jusqu'à la finale). Cette page admin reste toujours accessible.
+      </p>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:20px">
+        <span id="lock-status" style="font-weight:700">Chargement…</span>
+        <button class="btn btn-primary btn-sm" id="btn-toggle-lock" onclick="toggleSiteLock()">…</button>
+      </div>
 
       <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">🎴 Pack de joueurs</div>
       <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Ouvre un pack de 5 joueurs aléatoires avec effets de rareté.</p>
@@ -112,18 +120,6 @@
 
     <!-- Stats rapides -->
     <div id="stats-rapides" style="display:flex;gap:12px;margin-bottom:24px;flex-wrap:wrap"></div>
-
-    <!-- Verrou du site (suspense avant la finale) -->
-    <div class="card" style="margin-bottom:24px">
-      <div class="card-title">🤫 Verrou du site</div>
-      <p style="font-size:0.8rem;color:var(--muted);margin-bottom:12px">
-        Quand activé, toutes les pages publiques (classement, équipe, scores, tournoi, graphiques, palmarès, nations, barème, patch notes) affichent un écran de suspense au lieu de leur contenu. Cette page admin reste toujours accessible.
-      </p>
-      <div style="display:flex;align-items:center;gap:12px">
-        <span id="lock-status" style="font-weight:700">Chargement…</span>
-        <button class="btn btn-primary" id="btn-toggle-lock" onclick="toggleSiteLock()">…</button>
-      </div>
-    </div>
 
     <div class="admin-grid">
 

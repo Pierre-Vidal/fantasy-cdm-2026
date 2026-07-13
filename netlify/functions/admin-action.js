@@ -351,6 +351,21 @@ exports.handler = async (event) => {
       return ok({ fixtures });
     }
 
+    // ── Verrou du site (suspense avant la finale) ─────────────
+    if (action === 'get_site_lock') {
+      const rows = await sbGet('config', 'value', 'key=eq.site_locked');
+      const raw  = rows[0]?.value;
+      let locked = false;
+      try { locked = !!(typeof raw === 'string' ? JSON.parse(raw) : raw)?.locked; } catch {}
+      return ok({ locked });
+    }
+
+    if (action === 'set_site_lock') {
+      const { locked } = params || {};
+      await sbUpsert('config', [{ key: 'site_locked', value: { locked: !!locked } }], 'key');
+      return ok({ locked: !!locked });
+    }
+
     return { statusCode: 400, body: JSON.stringify({ error: 'Action inconnue : ' + action }) };
 
   } catch (e) {

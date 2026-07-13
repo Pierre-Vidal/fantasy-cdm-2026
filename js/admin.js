@@ -20,7 +20,6 @@ async function connecterAdmin() {
     chargerStats();
     chargerEquipes();
     chargerBareme();
-    chargerLockStatus();
     showToast('Connecté en admin ✓', 'success');
   } catch(e) {
     sessionStorage.removeItem('admin_service_key');
@@ -350,8 +349,8 @@ async function chargerLockStatus() {
   const btnEl    = document.getElementById('btn-toggle-lock');
   if (!statusEl || !btnEl) return;
   try {
-    const { data } = await adminDb.from('config').select('value').eq('key', 'site_locked').maybeSingle();
-    renderLockStatus(!!data?.value?.locked);
+    const { locked } = await adminAction('get_site_lock', {});
+    renderLockStatus(!!locked);
   } catch (e) {
     statusEl.textContent = 'Erreur : ' + e.message;
   }
@@ -363,11 +362,11 @@ function renderLockStatus(locked) {
   if (locked) {
     statusEl.innerHTML = '<span class="key-fail">🔒 Site verrouillé</span>';
     btnEl.textContent = '🔓 Déverrouiller le site';
-    btnEl.className = 'btn btn-secondary';
+    btnEl.className = 'btn btn-secondary btn-sm';
   } else {
     statusEl.innerHTML = '<span class="key-ok">🔓 Site accessible</span>';
     btnEl.textContent = '🔒 Verrouiller le site';
-    btnEl.className = 'btn btn-primary';
+    btnEl.className = 'btn btn-primary btn-sm';
   }
 }
 
@@ -375,12 +374,10 @@ async function toggleSiteLock() {
   const btnEl = document.getElementById('btn-toggle-lock');
   setLoading(btnEl, true);
   try {
-    const { data } = await adminDb.from('config').select('value').eq('key', 'site_locked').maybeSingle();
-    const nextLocked = !data?.value?.locked;
-    const { error } = await adminDb.from('config').upsert({ key: 'site_locked', value: { locked: nextLocked } }, { onConflict: 'key' });
-    if (error) throw error;
-    renderLockStatus(nextLocked);
-    showToast(nextLocked ? 'Site verrouillé ✓' : 'Site déverrouillé ✓', 'success');
+    const { locked: current } = await adminAction('get_site_lock', {});
+    const { locked } = await adminAction('set_site_lock', { locked: !current });
+    renderLockStatus(locked);
+    showToast(locked ? 'Site verrouillé ✓' : 'Site déverrouillé ✓', 'success');
   } catch (e) {
     showToast('Erreur : ' + e.message, 'error');
   } finally {
@@ -458,6 +455,7 @@ async function connecterRapide() {
     initMultiplicateurs();
     initEquipeLibre();
     chargerFixturesDone();
+    chargerLockStatus();
   } catch(e) {
     showToast(e.message, 'error');
     document.getElementById('rapide-panel').style.display = 'none';

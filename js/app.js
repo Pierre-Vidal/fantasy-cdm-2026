@@ -192,7 +192,11 @@ async function siteLockGuard() {
   if (!db) return false;
   try {
     const { data } = await db.from('config').select('value').eq('key', 'site_locked').maybeSingle();
-    if (!data?.value?.locked) return false;
+    // value peut être stocké comme objet JSONB natif ou comme string JSON échappée
+    // selon le chemin d'écriture utilisé — on gère les deux.
+    let raw = data?.value;
+    if (typeof raw === 'string') { try { raw = JSON.parse(raw); } catch { raw = null; } }
+    if (!raw?.locked) return false;
   } catch (e) {
     return false; // config absente ou erreur réseau → on n'empêche pas l'accès
   }
