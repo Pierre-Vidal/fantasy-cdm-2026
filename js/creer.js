@@ -113,6 +113,7 @@ function fuzzyMatch(nom, nation, query) {
 
 // ── Init ─────────────────────────────────────────────────
 async function init() {
+  if (await siteLockGuard()) return;
   const moi = getMonEquipe();
   if (moi) {
     document.getElementById('already-registered').style.display = 'block';

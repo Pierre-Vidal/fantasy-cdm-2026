@@ -7,6 +7,7 @@ function setMode(mode) {
 }
 
 async function init() {
+  if (await siteLockGuard()) return;
   const content = document.getElementById('content');
   try {
     const [classement, butsMap, equipesMeta] = await Promise.all([

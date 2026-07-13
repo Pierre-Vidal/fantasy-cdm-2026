@@ -14,6 +14,7 @@ function switchTab(tab, btn) {
 }
 
 async function init() {
+  if (await siteLockGuard()) return;
   try {
     const [fixtRes, multRes] = await Promise.all([
       db.from('fixtures').select('*').order('date_heure'),

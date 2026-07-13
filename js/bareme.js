@@ -19,6 +19,7 @@ const STATS_DEF = [
 const POS = ['GAR', 'DEF', 'MIL', 'ATT'];
 
 async function init() {
+  if (await siteLockGuard()) return;
   await loadBareme();
   renderBareme(CONFIG.BAREME);
 }

@@ -184,6 +184,33 @@ async function loadBareme() {
   } catch(e) {} // table pas encore créée → on garde le défaut de config.js
 }
 
+// ── Verrou du site avant la finale ────────────────────────
+// À appeler en tout début de init() sur chaque page publique. Si le site est
+// verrouillé (config.site_locked = true), affiche un écran de suspense et
+// retourne true — la page appelante doit alors faire `return` sans rien charger.
+async function siteLockGuard() {
+  if (!db) return false;
+  try {
+    const { data } = await db.from('config').select('value').eq('key', 'site_locked').maybeSingle();
+    if (!data?.value?.locked) return false;
+  } catch (e) {
+    return false; // config absente ou erreur réseau → on n'empêche pas l'accès
+  }
+
+  document.body.innerHTML = `
+    <div class="page" style="display:flex;align-items:center;justify-content:center;min-height:100vh;text-align:center">
+      <div>
+        <div style="font-size:3.5rem;margin-bottom:16px">🤫🐔</div>
+        <div class="page-title" style="margin-bottom:10px">Chut… le suspense reste entier</div>
+        <div class="page-subtitle" style="max-width:420px;margin:0 auto">
+          Pour préserver le suspense jusqu'au bout, les scores et classements sont masqués jusqu'à la finale.<br>
+          Reviens juste après le coup de sifflet final !
+        </div>
+      </div>
+    </div>`;
+  return true;
+}
+
 // ── Mode tournoi (officiel / tous) ───────────────────────
 function getModeTournoi() {
   return localStorage.getItem('cdm_mode') || 'officiel';

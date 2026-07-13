@@ -1004,6 +1004,7 @@ function initNav() {
 // Init
 // ─────────────────────────────────────────────────────────────
 async function init() {
+  if (await siteLockGuard()) return;
   initStarfield();
   initConfetti();
   initNav();

@@ -44,6 +44,7 @@ function setMode(mode) {
 
 // ── Init ─────────────────────────────────────────────────
 async function init() {
+  if (await siteLockGuard()) return;
   const content = document.getElementById('content');
   try {
     const [eqs, fixtures, allPoints] = await Promise.all([

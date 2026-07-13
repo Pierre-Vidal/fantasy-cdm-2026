@@ -20,6 +20,7 @@ async function connecterAdmin() {
     chargerStats();
     chargerEquipes();
     chargerBareme();
+    chargerLockStatus();
     showToast('Connecté en admin ✓', 'success');
   } catch(e) {
     sessionStorage.removeItem('admin_service_key');
@@ -342,6 +343,50 @@ const ADMIN_STATS_DEF = [
   { key: 'csc',        label: 'Contre son camp' },
 ];
 const ADMIN_POS = ['GAR', 'DEF', 'MIL', 'ATT'];
+
+// ── Verrou du site ─────────────────────────────────────────
+async function chargerLockStatus() {
+  const statusEl = document.getElementById('lock-status');
+  const btnEl    = document.getElementById('btn-toggle-lock');
+  if (!statusEl || !btnEl) return;
+  try {
+    const { data } = await adminDb.from('config').select('value').eq('key', 'site_locked').maybeSingle();
+    renderLockStatus(!!data?.value?.locked);
+  } catch (e) {
+    statusEl.textContent = 'Erreur : ' + e.message;
+  }
+}
+
+function renderLockStatus(locked) {
+  const statusEl = document.getElementById('lock-status');
+  const btnEl    = document.getElementById('btn-toggle-lock');
+  if (locked) {
+    statusEl.innerHTML = '<span class="key-fail">🔒 Site verrouillé</span>';
+    btnEl.textContent = '🔓 Déverrouiller le site';
+    btnEl.className = 'btn btn-secondary';
+  } else {
+    statusEl.innerHTML = '<span class="key-ok">🔓 Site accessible</span>';
+    btnEl.textContent = '🔒 Verrouiller le site';
+    btnEl.className = 'btn btn-primary';
+  }
+}
+
+async function toggleSiteLock() {
+  const btnEl = document.getElementById('btn-toggle-lock');
+  setLoading(btnEl, true);
+  try {
+    const { data } = await adminDb.from('config').select('value').eq('key', 'site_locked').maybeSingle();
+    const nextLocked = !data?.value?.locked;
+    const { error } = await adminDb.from('config').upsert({ key: 'site_locked', value: { locked: nextLocked } }, { onConflict: 'key' });
+    if (error) throw error;
+    renderLockStatus(nextLocked);
+    showToast(nextLocked ? 'Site verrouillé ✓' : 'Site déverrouillé ✓', 'success');
+  } catch (e) {
+    showToast('Erreur : ' + e.message, 'error');
+  } finally {
+    setLoading(btnEl, false);
+  }
+}
 
 async function chargerBareme() {
   await loadBareme();

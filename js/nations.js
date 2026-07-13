@@ -45,6 +45,7 @@ function computePtsFromStats(stats, joueurs, bareme) {
 }
 
 async function init() {
+  if (await siteLockGuard()) return;
   try {
     const [joueurs, stats, configRows] = await Promise.all([
       fetchAllDb(db.from('joueurs').select('id,nom,poste,nation,valeur')),

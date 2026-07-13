@@ -6,6 +6,7 @@ let _joueurStats = {};
 let _joueurMap   = {};
 
 async function init() {
+  if (await siteLockGuard()) return;
   const params  = new URLSearchParams(window.location.search);
   const id      = params.get('id');
   const content = document.getElementById('content');
