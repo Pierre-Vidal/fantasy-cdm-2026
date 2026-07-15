@@ -190,9 +190,9 @@ async function loadBareme() {
 // retourne true — la page appelante doit alors faire `return` sans rien charger.
 async function siteLockGuard() {
   if (!db) return false;
-  // Le verrou vit dans Supabase, partagé entre prod et dev — on l'ignore
-  // toujours sur l'environnement de dev pour ne pas se bloquer soi-même.
-  if (location.hostname.startsWith('dev--')) return false;
+  // Le verrou vit dans Supabase, partagé entre prod et les environnements de
+  // travail — on l'ignore toujours hors prod pour ne pas se bloquer soi-même.
+  if (location.hostname.startsWith('dev--') || location.hostname.startsWith('design--')) return false;
   try {
     const { data } = await db.from('config').select('value').eq('key', 'site_locked').maybeSingle();
     // value peut être stocké comme objet JSONB natif ou comme string JSON échappée
