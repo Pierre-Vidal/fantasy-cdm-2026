@@ -36,7 +36,11 @@
       transition: opacity .7s cubic-bezier(.4,0,.2,1), transform .7s cubic-bezier(.4,0,.2,1);
       will-change: transform, opacity;
       transform: translateX(100%); opacity: 0;
+      overflow-y: auto; overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
     }
+    .pslide::-webkit-scrollbar { width: 6px; }
+    .pslide::-webkit-scrollbar-thumb { background: rgba(238,242,255,.15); border-radius: 3px; }
     .pslide.active { transform: translateX(0); opacity: 1; }
 
     /* ── Typography ── */

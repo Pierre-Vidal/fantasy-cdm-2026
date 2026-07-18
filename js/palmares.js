@@ -117,7 +117,7 @@ async function loadData() {
   const [equipes, fixtures, points, stats, joueurs, equipeJoueurs, configRows] = await Promise.all([
     fetchAllDb(db.from('equipes').select('id,nom,officiel')),
     fetchAllDb(db.from('fixtures').select('id,round,date_heure,home_name,away_name,home_goals,away_goals,status')),
-    fetchAllDb(db.from('points').select('equipe_id,fixture_id,joueur_id,points')),
+    fetchAllDb(db.from('points').select('equipe_id,fixture_id,joueur_id,points,detail')),
     fetchAllDb(db.from('stats').select('joueur_id,fixture_id,buts,passes,clean_sheet,minutes,arrets,buts_encaisses,pen_arrete,pen_manque,jaune,rouge,csc')),
     fetchAllDb(db.from('joueurs').select('id,nom,poste,nation,photo,valeur')),
     fetchAllDb(db.from('equipe_joueurs').select('equipe_id,joueur_id')),
@@ -132,6 +132,27 @@ async function loadData() {
 // Calcul des points depuis les stats (TOUS les joueurs, pas
 // seulement ceux sélectionnés dans une équipe)
 // ─────────────────────────────────────────────────────────────
+function calcMatchDetail(poste, s, bareme) {
+  const b = (bareme && (bareme[poste] || bareme['MIL'])) || null;
+  const detail = {}; let pts = 0;
+  if(!b) return {points:0, detail};
+  const add=(k,v)=>{ if(v){ detail[k]=v; pts+=v; } };
+  if(s.minutes >= 60)       add('Temps (≥60 min)', b.min60||0);
+  else if(s.minutes > 0)    add('Temps (<60 min)', b.moins60||0);
+  if(s.buts   > 0)          add(`Buts ×${s.buts}`,     (b.but||0)*s.buts);
+  if(s.passes > 0)          add(`Passes ×${s.passes}`, (b.passe||0)*s.passes);
+  if(s.clean_sheet)         add('Clean sheet', b.cleanSheet||0);
+  if(poste==='GAR' && (s.arrets||0)>=3) { const t=Math.floor(s.arrets/3); add(`Arrêts ×${t}`, (b.arrets3||0)*t); }
+  if(s.pen_arrete)          add('Penalty arrêté', b.penArrete||0);
+  if(s.pen_manque)          add('Penalty manqué', b.penManque||0);
+  const bEnc=s.buts_encaisses||0;
+  if(bEnc>=2)               { const t=Math.floor(bEnc/2); add(`Buts enc. ×${t}`, (b.butEnc2||0)*t); }
+  if(s.jaune)               add('Carton jaune', b.jaune||0);
+  if(s.rouge)               add('Carton rouge', b.rouge||0);
+  if(s.csc > 0)             add(`CSC ×${s.csc}`, (b.csc||0)*s.csc);
+  return {points:pts, detail};
+}
+
 function computeAllPtsJ(stats, joueurs, bareme) {
   if(!bareme) return null;
   const posteMap = {};
@@ -140,25 +161,42 @@ function computeAllPtsJ(stats, joueurs, bareme) {
   stats.forEach(s=>{
     const poste = posteMap[s.joueur_id];
     if(!poste) return;
-    const b = bareme[poste] || bareme['MIL'];
-    if(!b) return;
-    let pts = 0;
-    if(s.minutes >= 60)       pts += b.min60   || 0;
-    else if(s.minutes > 0)    pts += b.moins60 || 0;
-    pts += (s.buts   || 0) * (b.but    || 0);
-    pts += (s.passes || 0) * (b.passe  || 0);
-    if(s.clean_sheet)         pts += b.cleanSheet || 0;
-    if(poste==='GAR' && (s.arrets||0)>=3) pts += Math.floor((s.arrets||0)/3)*(b.arrets3||0);
-    if(s.pen_arrete)          pts += b.penArrete || 0;
-    if(s.pen_manque)          pts += b.penManque || 0;
-    const bEnc = s.buts_encaisses||0;
-    if(bEnc>=2)               pts += Math.floor(bEnc/2)*(b.butEnc2||0);
-    if(s.jaune)               pts += b.jaune || 0;
-    if(s.rouge)               pts += b.rouge || 0;
-    pts += (s.csc||0)*(b.csc||0);
+    const {points:pts} = calcMatchDetail(poste, s, bareme);
     out[s.joueur_id] = (out[s.joueur_id]||0) + pts;
   });
   Object.keys(out).forEach(k=>{ out[k]=rnd(out[k]); });
+  return out;
+}
+
+// Détail match par match pour un ensemble de joueurs, recalculé depuis
+// stats × barème (utilisé pour l'équipe théorique, qui n'a jamais existé
+// donc n'a aucune ligne dans la table points).
+function buildMatchsFromStats(joueurIds, stats, fixturesById, joueurs, bareme) {
+  const posteMap = {};
+  joueurs.forEach(j=>{ posteMap[j.id]=j.poste; });
+  const out = {};
+  joueurIds.forEach(id=>{ out[id]=[]; });
+  stats.forEach(s=>{
+    if(!joueurIds.has(s.joueur_id)) return;
+    const poste = posteMap[s.joueur_id]; if(!poste) return;
+    const {points, detail} = calcMatchDetail(poste, s, bareme);
+    if(points===0 && Object.keys(detail).length===0) return;
+    out[s.joueur_id].push({fixture:fixturesById[s.fixture_id]||null, points:rnd(points), detail});
+  });
+  return out;
+}
+
+// Détail match par match depuis les vraies lignes `points` (utilisé pour
+// l'équipe championne, qui a réellement existé et dont les points incluent
+// les multiplicateurs de phase finale déjà appliqués).
+function buildMatchsFromPoints(equipeId, points, fixturesById) {
+  const out = {};
+  points.filter(p=>p.equipe_id===equipeId).forEach(p=>{
+    let detail={};
+    try { detail = typeof p.detail==='string' ? JSON.parse(p.detail) : (p.detail||{}); } catch {}
+    if(!out[p.joueur_id]) out[p.joueur_id]=[];
+    out[p.joueur_id].push({fixture:fixturesById[p.fixture_id]||null, points:rnd(p.points), detail});
+  });
   return out;
 }
 
@@ -167,6 +205,7 @@ function computeAllPtsJ(stats, joueurs, bareme) {
 // ─────────────────────────────────────────────────────────────
 function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bareme}) {
   const done = fixtures.filter(f=>['FT','AET','PEN'].includes(f.status));
+  const fixturesById = {}; fixtures.forEach(f=>{ fixturesById[f.id]=f; });
   const totalGoals  = done.reduce((s,f)=>s+(f.home_goals||0)+(f.away_goals||0),0);
   const totalPts    = rnd(points.reduce((s,p)=>s+p.points,0));
   const totalPasses = stats.reduce((s,x)=>s+(x.passes||0),0);
@@ -231,9 +270,12 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   let winnerPlayers = [];
   if(winner) {
     const wIds = new Set((equipeJoueurs||[]).filter(ej=>ej.equipe_id===winner.id).map(ej=>ej.joueur_id));
-    winnerPlayers = joueurs.filter(j=>wIds.has(j.id)).map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0),buts:bJ[j.id]||0,passes:passJ[j.id]||0}));
+    const winnerMatchs = buildMatchsFromPoints(winner.id, points, fixturesById);
+    winnerPlayers = joueurs.filter(j=>wIds.has(j.id)).map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0),buts:bJ[j.id]||0,passes:passJ[j.id]||0,matchs:winnerMatchs[j.id]||[]}));
   }
-  bestTeam.players = bestTeam.players.map(j=>({...j,buts:bJ[j.id]||0,passes:passJ[j.id]||0}));
+  const bestTeamIds = new Set(bestTeam.players.map(j=>j.id));
+  const bestTeamMatchs = buildMatchsFromStats(bestTeamIds, stats, fixturesById, joueurs, bareme);
+  bestTeam.players = bestTeam.players.map(j=>({...j,buts:bJ[j.id]||0,passes:passJ[j.id]||0,matchs:bestTeamMatchs[j.id]||[]}));
 
   // Meilleur match d'UNE équipe fantasy (max de points sur un seul match, officielles uniquement)
   const ptsEqFix = {};
@@ -444,7 +486,6 @@ function sTopScorer(d) {
 
 function sTopPerf(d) {
   const j=d.topPerf; if(!j) return null;
-  if(d.topScore&&j.id===d.topScore.id) return null; // Skip si même joueur que top scorer
   return {
     html:`
       <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.2vw,22px)">
@@ -593,6 +634,7 @@ function revealPins(el) {
 }
 
 // Détail au survol d'un pin (mêmes infos que la page équipe) : nom, points, buts, passes.
+// Clic → modal avec le détail match par match (même principe que la page équipe).
 function attachPinTooltips(el, players) {
   const byId = {};
   players.forEach(p=>{ byId[p.id]=p; });
@@ -600,10 +642,79 @@ function attachPinTooltips(el, players) {
   el.querySelectorAll('.ppin').forEach(pin=>{
     const p = byId[pin.dataset.jid];
     if (!p) return;
+    pin.style.cursor='pointer';
     pin.addEventListener('mouseenter', (e)=>showPalmaresTip(e,p));
     pin.addEventListener('mousemove', positionPalmaresTip);
     pin.addEventListener('mouseleave', hidePalmaresTip);
+    pin.addEventListener('click', ()=>openPalmaresJoueurModal(p));
   });
+}
+
+function openPalmaresJoueurModal(p) {
+  hidePalmaresTip();
+  const sorted = [...(p.matchs||[])].sort((a,b)=>
+    new Date(a.fixture?.date_heure||0) - new Date(b.fixture?.date_heure||0));
+
+  const matchRows = sorted.map(m=>{
+    const fx=m.fixture;
+    const label = fx
+      ? `${esc(fx.home_name)} <span style="color:${GOLD};font-weight:700">${fx.home_goals??'?'}-${fx.away_goals??'?'}</span> ${esc(fx.away_name)}`
+      : 'Match inconnu';
+    const detailStr = Object.entries(m.detail||{})
+      .map(([k,v])=>`<span style="color:${v>0?'#3fb950':'#e5484d'}">${v>0?'+':''}${v}</span>&thinsp;${esc(k)}`)
+      .join(' · ');
+    return `
+      <div style="padding:8px 0;border-bottom:1px solid rgba(238,242,255,.08)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+          <div style="font-size:.8rem;flex:1;line-height:1.4">${label}</div>
+          <div style="font-weight:800;font-size:1rem;white-space:nowrap;color:${m.points>0?GOLD:m.points<0?'#e5484d':'rgba(238,242,255,.4)'}">${m.points>0?'+':''}${m.points} pts</div>
+        </div>
+        <div style="font-size:.72rem;color:rgba(238,242,255,.4);margin-top:3px">${detailStr||'—'}</div>
+      </div>`;
+  }).join('');
+
+  document.getElementById('palmares-joueur-modal')?.remove();
+  const modal=document.createElement('div');
+  modal.id='palmares-joueur-modal';
+  modal.style.cssText='position:fixed;inset:0;z-index:600;background:rgba(0,0,0,.72);display:flex;align-items:center;justify-content:center;padding:16px';
+  modal.innerHTML=`
+    <div style="background:#161b22;border:1px solid rgba(238,242,255,.12);border-radius:14px;padding:22px;max-width:460px;width:100%;max-height:80vh;overflow-y:auto;text-align:left;position:relative">
+      <button onclick="document.getElementById('palmares-joueur-modal').remove()" style="position:absolute;top:12px;right:14px;background:none;border:none;color:rgba(238,242,255,.5);font-size:1.4rem;cursor:pointer;line-height:1">×</button>
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+        ${p.photo
+          ? `<img src="${esc(p.photo)}" style="width:48px;height:48px;border-radius:50%;object-fit:cover;border:2px solid ${GOLD}">`
+          : `<div style="width:48px;height:48px;border-radius:50%;background:${GOLD}33;display:flex;align-items:center;justify-content:center;font-weight:800;color:${GOLD}">${esc(p.nom.split(' ').map(w=>w[0]).join('').slice(0,2))}</div>`}
+        <div>
+          <div style="font-weight:800;font-size:1rem;color:#eef2ff">${esc(p.nom)}</div>
+          <div style="font-size:.78rem;color:rgba(238,242,255,.45);margin-top:2px">${esc(p.nation)} · ${esc(p.poste)}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <div style="flex:1;text-align:center;background:rgba(238,242,255,.04);border-radius:10px;padding:10px 6px">
+          <div style="font-size:1.2rem;font-weight:800;color:${GOLD}">${p.totalPts}</div>
+          <div style="font-size:.62rem;color:rgba(238,242,255,.4)">Points</div>
+        </div>
+        <div style="flex:1;text-align:center;background:rgba(238,242,255,.04);border-radius:10px;padding:10px 6px">
+          <div style="font-size:1.2rem;font-weight:800;color:#3fb950">${p.buts}</div>
+          <div style="font-size:.62rem;color:rgba(238,242,255,.4)">Buts</div>
+        </div>
+        <div style="flex:1;text-align:center;background:rgba(238,242,255,.04);border-radius:10px;padding:10px 6px">
+          <div style="font-size:1.2rem;font-weight:800;color:#f0883e">${p.passes}</div>
+          <div style="font-size:.62rem;color:rgba(238,242,255,.4)">Passes</div>
+        </div>
+        <div style="flex:1;text-align:center;background:rgba(238,242,255,.04);border-radius:10px;padding:10px 6px">
+          <div style="font-size:1.2rem;font-weight:800;color:#eef2ff">${sorted.length}</div>
+          <div style="font-size:.62rem;color:rgba(238,242,255,.4)">Matchs</div>
+        </div>
+      </div>
+      <div style="font-size:.68rem;font-weight:700;color:rgba(238,242,255,.4);text-transform:uppercase;letter-spacing:.06em;margin-bottom:4px">Par match</div>
+      ${matchRows || '<div style="color:rgba(238,242,255,.4);font-size:.85rem;padding:8px 0">Aucun match joué</div>'}
+    </div>`;
+  modal.addEventListener('click', (e)=>{ if(e.target===modal) modal.remove(); });
+  document.addEventListener('keydown', function closeOnEsc(e){
+    if(e.key==='Escape'){ modal.remove(); document.removeEventListener('keydown', closeOnEsc); }
+  });
+  document.body.appendChild(modal);
 }
 
 function showPalmaresTip(event, p) {
