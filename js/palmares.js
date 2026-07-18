@@ -201,6 +201,10 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   const topScore = [...joueurs].map(j=>({...j,buts:bJ[j.id]||0}))
     .filter(j=>j.buts>0).sort((a,b)=>b.buts-a.buts)[0]||null;
 
+  // Buts + passes cumulés par joueur (pour le détail au survol des pins)
+  const passJ={};
+  stats.forEach(s=>{ passJ[s.joueur_id]=(passJ[s.joueur_id]||0)+(s.passes||0); });
+
   // Top clean sheets
   const csJ={};
   stats.forEach(s=>{ if(s.clean_sheet) csJ[s.joueur_id]=(csJ[s.joueur_id]||0)+1; });
@@ -225,7 +229,39 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   let winnerPlayers = [];
   if(winner) {
     const wIds = new Set((equipeJoueurs||[]).filter(ej=>ej.equipe_id===winner.id).map(ej=>ej.joueur_id));
-    winnerPlayers = joueurs.filter(j=>wIds.has(j.id)).map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0)}));
+    winnerPlayers = joueurs.filter(j=>wIds.has(j.id)).map(j=>({...j,totalPts:rnd(ptsJ[j.id]||0),buts:bJ[j.id]||0,passes:passJ[j.id]||0}));
+  }
+  bestTeam.players = bestTeam.players.map(j=>({...j,buts:bJ[j.id]||0,passes:passJ[j.id]||0}));
+
+  // Meilleur match d'UNE équipe fantasy (max de points sur un seul match)
+  const ptsEqFix = {};
+  points.forEach(p=>{
+    const k=`${p.equipe_id}_${p.fixture_id}`;
+    ptsEqFix[k]=(ptsEqFix[k]||0)+p.points;
+  });
+  let bestTeamMatch = null;
+  Object.entries(ptsEqFix).forEach(([k,pts])=>{
+    if(!bestTeamMatch || pts>bestTeamMatch.pts){
+      const [equipeId,fixtureId]=k.split('_');
+      bestTeamMatch={equipeId,fixtureId,pts:rnd(pts)};
+    }
+  });
+  let bestTeamMatchInfo = null;
+  if(bestTeamMatch){
+    const eq = equipes.find(e=>e.id===bestTeamMatch.equipeId);
+    const fx = done.find(f=>String(f.id)===String(bestTeamMatch.fixtureId));
+    if(eq && fx){
+      const scorers = points
+        .filter(p=>p.equipe_id===bestTeamMatch.equipeId && String(p.fixture_id)===String(bestTeamMatch.fixtureId))
+        .map(p=>{
+          const j = joueurs.find(x=>x.id===p.joueur_id);
+          const s = stats.find(x=>x.joueur_id===p.joueur_id && String(x.fixture_id)===String(bestTeamMatch.fixtureId));
+          return j ? {...j, totalPts:rnd(p.points), buts:s?.buts||0, passes:s?.passes||0} : null;
+        })
+        .filter(Boolean)
+        .sort((a,b)=>b.totalPts-a.totalPts);
+      bestTeamMatchInfo = {equipe:eq, fixture:fx, pts:bestTeamMatch.pts, scorers};
+    }
   }
 
   // Points par fixture × equipe (pour le race chart)
@@ -268,7 +304,7 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
     matchCount, avgPtsMatch,
     nationsRanking, equipesByPos,
     topPerf, topScore, topCS2, bestF, bestFPts, bestTeam,
-    winner, winnerPlayers};
+    winner, winnerPlayers, bestTeamMatchInfo};
 }
 
 function computeBestTeam(joueurs, ptsJ) {
@@ -472,6 +508,58 @@ function sBestMatch(d) {
   };
 }
 
+function sBestTeamMatch(d) {
+  const info=d.bestTeamMatchInfo; if(!info) return null;
+  const f=info.fixture;
+  const date=f.date_heure?new Date(f.date_heure).toLocaleDateString('fr-FR',{day:'numeric',month:'long'}):'';
+  const topScorers=info.scorers.slice(0,5);
+
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2.2vw,22px);width:100%">
+        <div class="t-eyebrow rv" data-d="0">💥 Le carton d'une équipe</div>
+        <div class="rv" data-d=".15" style="text-align:center">
+          <div class="t-lg g-gold" style="font-size:clamp(1rem,2.5vw,1.9rem);text-transform:none;letter-spacing:.01em">${esc(info.equipe.nom)}</div>
+          <div style="font-size:clamp(.55rem,1.2vw,.7rem);letter-spacing:.1em;text-transform:uppercase;color:rgba(238,242,255,.3);margin-top:2px">a marqué son record sur un seul match</div>
+        </div>
+        <div class="match-card rv" data-d=".3">
+          <div style="font-size:clamp(.6rem,1.3vw,.78rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.3);margin-bottom:10px">
+            ${esc(f.round)}${date?' · '+date:''}
+          </div>
+          <div style="display:flex;align-items:center;gap:clamp(14px,4vw,44px)">
+            <div style="text-align:right;min-width:clamp(70px,12vw,130px)">
+              <div style="font-size:clamp(.75rem,2vw,1.1rem);font-weight:600">${esc(f.home_name)}</div>
+              <div style="font-size:clamp(1rem,2.5vw,1.6rem);margin-top:2px">${flag(f.home_name)}</div>
+            </div>
+            <div class="match-score-big g-gold">${f.home_goals}–${f.away_goals}</div>
+            <div style="text-align:left;min-width:clamp(70px,12vw,130px)">
+              <div style="font-size:clamp(.75rem,2vw,1.1rem);font-weight:600">${esc(f.away_name)}</div>
+              <div style="font-size:clamp(1rem,2.5vw,1.6rem);margin-top:2px">${flag(f.away_name)}</div>
+            </div>
+          </div>
+        </div>
+        <div class="rv" data-d=".55" style="text-align:center">
+          <div class="t-eyebrow" style="margin-bottom:6px">Points marqués ce match-là</div>
+          <div class="t-lg c-gold"><span id="cnt-btmpts">0</span> <span class="c-muted" style="font-size:.6em">pts</span></div>
+        </div>
+        ${topScorers.length?`
+        <div class="rv" data-d=".75" style="display:flex;flex-direction:column;gap:6px;width:100%;max-width:420px">
+          ${topScorers.map(p=>`
+            <div style="display:flex;align-items:center;gap:10px;background:rgba(238,242,255,.04);border:1px solid rgba(238,242,255,.07);border-radius:10px;padding:8px 12px">
+              <div style="flex:1;min-width:0;font-size:clamp(.72rem,1.5vw,.88rem);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(p.nom)}</div>
+              ${p.buts>0?`<div style="font-size:.68rem;color:#3fb950">⚽${p.buts>1?' ×'+p.buts:''}</div>`:''}
+              ${p.passes>0?`<div style="font-size:.68rem;color:#f0883e">🎯${p.passes>1?' ×'+p.passes:''}</div>`:''}
+              <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(.9rem,2vw,1.15rem);color:${GOLD}">${p.totalPts}</div>
+            </div>`).join('')}
+        </div>`:''}
+      </div>`,
+    onEnter(el){
+      reveal(el,90);
+      setTimeout(()=>animCount(el.querySelector('#cnt-btmpts'),info.pts,1200,1),650);
+    }
+  };
+}
+
 function makePins(players) {
   const byPos={GAR:[],DEF:[],MIL:[],ATT:[]};
   players.forEach(p=>{ if(byPos[p.poste]) byPos[p.poste].push(p); });
@@ -483,7 +571,7 @@ function makePins(players) {
       const ini=p.nom.split(' ').map(w=>w[0]).join('').toUpperCase().slice(0,2);
       // Inline transitions — avoid .rv which conflicts with absolute positioning transform
       html+=`
-        <div class="ppin" style="left:${slot.x}%;top:${slot.y}%;opacity:0;transition:opacity .5s ease ${.3+i*.05}s,transform .5s ease ${.3+i*.05}s;transform:translate(-50%,-50%) scale(.6)">
+        <div class="ppin" data-jid="${p.id}" style="left:${slot.x}%;top:${slot.y}%;opacity:0;transition:opacity .5s ease ${.3+i*.05}s,transform .5s ease ${.3+i*.05}s;transform:translate(-50%,-50%) scale(.6)">
           ${p.photo
             ?`<img class="ppin-photo" src="${esc(p.photo)}" alt="${esc(ini)}" onerror="this.outerHTML='<div class=ppin-photo>${ini}</div>'">`
             :`<div class="ppin-photo">${ini}</div>`}
@@ -500,6 +588,49 @@ function revealPins(el) {
     p.style.opacity='1';
     p.style.transform='translate(-50%,-50%)';
   });
+}
+
+// Détail au survol d'un pin (mêmes infos que la page équipe) : nom, points, buts, passes.
+function attachPinTooltips(el, players) {
+  const byId = {};
+  players.forEach(p=>{ byId[p.id]=p; });
+
+  el.querySelectorAll('.ppin').forEach(pin=>{
+    const p = byId[pin.dataset.jid];
+    if (!p) return;
+    pin.addEventListener('mouseenter', (e)=>showPalmaresTip(e,p));
+    pin.addEventListener('mousemove', positionPalmaresTip);
+    pin.addEventListener('mouseleave', hidePalmaresTip);
+  });
+}
+
+function showPalmaresTip(event, p) {
+  let el = document.getElementById('pitch-tip');
+  if (!el) { el = document.createElement('div'); el.id = 'pitch-tip'; document.body.appendChild(el); }
+  el.className = 'pitch-tip';
+  el.innerHTML = `
+    <div style="font-weight:700;margin-bottom:3px">${esc(p.nom)}</div>
+    <div style="font-size:1.05rem;font-weight:800;color:${GOLD}">${p.totalPts} pts</div>
+    ${p.buts   > 0 ? `<div style="font-size:0.76rem;color:#3fb950;margin-top:1px">⚽ ${p.buts} but${p.buts > 1 ? 's' : ''}</div>` : ''}
+    ${p.passes > 0 ? `<div style="font-size:0.76rem;color:#f0883e;margin-top:1px">🎯 ${p.passes} passe${p.passes > 1 ? 's' : ''}</div>` : ''}`;
+  el.style.display = 'block';
+  positionPalmaresTip(event);
+}
+
+function positionPalmaresTip(event) {
+  const el = document.getElementById('pitch-tip');
+  if (!el || el.style.display === 'none') return;
+  const m = 14, w = el.offsetWidth || 150, h = el.offsetHeight || 90;
+  let x = event.clientX + m, y = event.clientY + m;
+  if (x + w > window.innerWidth  - 8) x = event.clientX - w - m;
+  if (y + h > window.innerHeight - 8) y = event.clientY - h - m;
+  el.style.left = Math.max(8, x) + 'px';
+  el.style.top  = Math.max(8, y) + 'px';
+}
+
+function hidePalmaresTip() {
+  const el = document.getElementById('pitch-tip');
+  if (el) el.style.display = 'none';
 }
 
 function pitchInner(pins) {
@@ -590,8 +721,12 @@ function sCompare(d) {
       </div>`,
     onEnter(el){
       reveal(el,80);
-      setTimeout(()=>revealPins(el),500);
-    }
+      setTimeout(()=>{
+        revealPins(el);
+        attachPinTooltips(el, [...d.winnerPlayers, ...players]);
+      },500);
+    },
+    onLeave(){ hidePalmaresTip(); }
   };
 }
 
@@ -908,14 +1043,15 @@ function buildSlides(d) {
     sIntro(d),
     sMerci(d),
     sChiffres(d),
-    sRaceChart(d),
     sNations(d),
     d.topScore ? sTopScorer(d) : null,
     sTopPerf(d),
     d.bestF ? sBestMatch(d) : null,
+    d.bestTeamMatchInfo ? sBestTeamMatch(d) : null,
     d.ranking[2] ? sPodium(3,d) : null,
     d.ranking[1] ? sPodium(2,d) : null,
     d.ranking[0] ? sPodium(1,d) : null,
+    sRaceChart(d),
     sMentionPos('ATT',d),
     sMentionPos('MIL',d),
     sMentionPos('DEF',d),
