@@ -422,6 +422,25 @@ function sMerci(d) {
   };
 }
 
+function sOutro(d) {
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(14px,3vw,30px);max-width:680px">
+        <span class="chicken-bob rv" data-d="0" style="font-size:clamp(4rem,14vw,9rem);display:block">🐔</span>
+        <div class="t-xl rv" data-d=".3" style="letter-spacing:.04em;color:rgba(238,242,255,.92)">Merci et à bientôt !</div>
+        <div class="divider rv" data-d=".55"></div>
+        <div class="t-serif rv" data-d=".7" style="font-size:clamp(.9rem,2.3vw,1.35rem);color:rgba(238,242,255,.55);line-height:1.6">
+          On espère vous revoir l'année prochaine pour la <span style="color:${GOLD};font-weight:700">Ligue des Champions</span>,<br>
+          ou dans deux ans pour l'<span style="color:${GOLD};font-weight:700">Euro</span> !
+        </div>
+        <div class="t-serif rv" data-d="1.0" style="font-size:clamp(.8rem,2vw,1.1rem);color:rgba(238,242,255,.35)">
+          Plein de surprises vous attendent d'ici là… 👀
+        </div>
+      </div>`,
+    onEnter(el){ reveal(el,100); }
+  };
+}
+
 function sChiffres(d) {
   const cards=[
     {icon:'🏟️', id:'cnt-mx', val:d.matchCount,   label:'Matchs suivis',       col:'#82c9f5'},
@@ -1171,6 +1190,7 @@ function buildSlides(d) {
     sMentionPos('MIL',d),
     sMentionPos('DEF',d),
     sCompare(d),
+    sOutro(d),
   ].filter(Boolean);
 
   const wrap=document.getElementById('slides-wrap');
