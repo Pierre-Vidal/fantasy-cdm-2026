@@ -176,9 +176,11 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   stats.forEach(s=>{ if(s.clean_sheet) csFixtures.add(s.fixture_id); });
   const totalCS = csFixtures.size;
 
-  // Points par equipe
+  // Points par equipe (uniquement les équipes officielles)
+  const officielIds = new Set(equipes.filter(e=>e.officiel).map(e=>e.id));
+  const officielPoints = points.filter(p=>officielIds.has(p.equipe_id));
   const ptsEq = {};
-  points.forEach(p=>{ ptsEq[p.equipe_id]=(ptsEq[p.equipe_id]||0)+p.points; });
+  officielPoints.forEach(p=>{ ptsEq[p.equipe_id]=(ptsEq[p.equipe_id]||0)+p.points; });
   const ranking = equipes
     .filter(e=>e.officiel)
     .map(e=>({...e, total:rnd(ptsEq[e.id]||0)}))
@@ -211,9 +213,9 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   const topCS2 = [...joueurs].map(j=>({...j,cs:csJ[j.id]||0}))
     .filter(j=>j.cs>0).sort((a,b)=>b.cs-a.cs)[0]||null;
 
-  // Match le plus lucratif (points cumulés)
+  // Match le plus lucratif (points cumulés, équipes officielles uniquement)
   const ptsF={};
-  points.forEach(p=>{ ptsF[p.fixture_id]=(ptsF[p.fixture_id]||0)+p.points; });
+  officielPoints.forEach(p=>{ ptsF[p.fixture_id]=(ptsF[p.fixture_id]||0)+p.points; });
   const bestFId = Object.entries(ptsF).sort((a,b)=>b[1]-a[1])[0]?.[0];
   const bestF   = bestFId ? done.find(f=>f.id==bestFId) : null;
   const bestFPts= bestFId ? rnd(ptsF[bestFId]) : 0;
@@ -233,9 +235,9 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   }
   bestTeam.players = bestTeam.players.map(j=>({...j,buts:bJ[j.id]||0,passes:passJ[j.id]||0}));
 
-  // Meilleur match d'UNE équipe fantasy (max de points sur un seul match)
+  // Meilleur match d'UNE équipe fantasy (max de points sur un seul match, officielles uniquement)
   const ptsEqFix = {};
-  points.forEach(p=>{
+  officielPoints.forEach(p=>{
     const k=`${p.equipe_id}_${p.fixture_id}`;
     ptsEqFix[k]=(ptsEqFix[k]||0)+p.points;
   });
@@ -251,7 +253,7 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
     const eq = equipes.find(e=>e.id===bestTeamMatch.equipeId);
     const fx = done.find(f=>String(f.id)===String(bestTeamMatch.fixtureId));
     if(eq && fx){
-      const scorers = points
+      const scorers = officielPoints
         .filter(p=>p.equipe_id===bestTeamMatch.equipeId && String(p.fixture_id)===String(bestTeamMatch.fixtureId))
         .map(p=>{
           const j = joueurs.find(x=>x.id===p.joueur_id);
