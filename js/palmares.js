@@ -705,7 +705,7 @@ function sCompare(d) {
             <div class="t-lg g-gold" style="font-size:clamp(.85rem,2vw,1.7rem);text-transform:none;letter-spacing:.01em;text-align:center">${esc(d.winner.nom)}</div>
             <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.8rem);color:${GOLD};line-height:1">${d.winner.total}<span style="font-size:.45em;color:rgba(238,242,255,.3);margin-left:6px">pts</span></div>
             <div style="${wrapStyle}">
-              <div style="${pitchStyle}">${pitchInner(wPins)}</div>
+              <div class="pitch-left" style="${pitchStyle}">${pitchInner(wPins)}</div>
             </div>
           </div>
 
@@ -715,7 +715,7 @@ function sCompare(d) {
             <div class="t-lg" style="font-size:clamp(.85rem,2vw,1.7rem);text-transform:none;letter-spacing:.01em;text-align:center;color:rgba(238,242,255,.75)">Meilleure équipe théorique</div>
             <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1.4rem,3.5vw,2.8rem);color:${SILVER};line-height:1">${bestTotal}<span style="font-size:.45em;color:rgba(238,242,255,.3);margin-left:6px">pts</span></div>
             <div style="${wrapStyle}">
-              <div style="${pitchStyle}">${pitchInner(bPins)}</div>
+              <div class="pitch-right" style="${pitchStyle}">${pitchInner(bPins)}</div>
             </div>
           </div>
 
@@ -725,7 +725,9 @@ function sCompare(d) {
       reveal(el,80);
       setTimeout(()=>{
         revealPins(el);
-        attachPinTooltips(el, [...d.winnerPlayers, ...players]);
+        const left = el.querySelector('.pitch-left'), right = el.querySelector('.pitch-right');
+        if(left)  attachPinTooltips(left, d.winnerPlayers);
+        if(right) attachPinTooltips(right, players);
       },500);
     },
     onLeave(){ hidePalmaresTip(); }
