@@ -7,6 +7,7 @@ function setMode(mode) {
 }
 
 async function init() {
+  if (redirectFirstVisitToPalmares()) return;
   if (await siteLockGuard()) return;
   const content = document.getElementById('content');
   try {

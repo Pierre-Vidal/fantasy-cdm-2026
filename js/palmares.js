@@ -1276,6 +1276,7 @@ function initNav() {
 // ─────────────────────────────────────────────────────────────
 async function init() {
   if (await siteLockGuard()) return;
+  localStorage.setItem('palmares_vu', '1'); // évite une redirection ultérieure depuis l'accueil
   initStarfield();
   initConfetti();
   initNav();

@@ -53,6 +53,7 @@ function buildNav(activePage) {
         <a href="tournoi.html" class="${activePage === 'tournoi' ? 'active' : ''}">🌍 Tournoi</a>
         <a href="graphiques.html" class="${activePage === 'graphiques' ? 'active' : ''}">📊 Stats</a>
         <a href="nations.html" class="${activePage === 'nations' ? 'active' : ''}">🌍 Nations</a>
+        <a href="palmares.html" class="${activePage === 'palmares' ? 'active' : ''}">🏅 Palmarès</a>
         <a href="patchnotes.html" class="${activePage === 'patchnotes' ? 'active' : ''}">📝</a>
         <a href="admin.html" class="${activePage === 'admin' ? 'active' : ''}">⚙️</a>
       </div>
@@ -182,6 +183,18 @@ async function loadBareme() {
     const { data } = await db.from('config').select('value').eq('key', 'bareme').single();
     if (data?.value) CONFIG.BAREME = data.value;
   } catch(e) {} // table pas encore créée → on garde le défaut de config.js
+}
+
+// ── Première visite : redirige vers le palmarès ───────────
+// À appeler en tout début de init() sur la page d'accueil (classement) UNIQUEMENT.
+// Pose un flag localStorage pour ne rediriger qu'une seule fois par navigateur.
+// Retourne true si une redirection a été déclenchée — la page appelante doit
+// alors faire `return` immédiatement sans rien charger.
+function redirectFirstVisitToPalmares() {
+  if (localStorage.getItem('palmares_vu')) return false;
+  localStorage.setItem('palmares_vu', '1');
+  location.replace('palmares.html');
+  return true;
 }
 
 // ── Verrou du site avant la finale ────────────────────────
