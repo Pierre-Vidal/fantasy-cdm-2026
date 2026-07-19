@@ -318,6 +318,32 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   const matchCount = done.length;
   const avgPtsMatch = matchCount > 0 ? rnd(totalPts / matchCount) : 0;
 
+  // Classement "jours n°1" : nombre de jours (pas de matchs) où chaque équipe
+  // officielle a été en tête du classement général, cumulé sur tout le tournoi.
+  const daySet = new Set();
+  done.forEach(f=>{ if(f.date_heure) daySet.add(f.date_heure.substring(0,10)); });
+  const sortedDays = [...daySet].sort();
+  const fixByDay = {};
+  done.forEach(f=>{
+    if(!f.date_heure) return;
+    const day = f.date_heure.substring(0,10);
+    if(!fixByDay[day]) fixByDay[day]=[];
+    fixByDay[day].push(f.id);
+  });
+  const cumulByEq = {}; ranking.forEach(eq=>{ cumulByEq[eq.id]=0; });
+  const joursPremierMap = {}; ranking.forEach(eq=>{ joursPremierMap[eq.id]=0; });
+  sortedDays.forEach(day=>{
+    (fixByDay[day]||[]).forEach(fid=>{
+      ranking.forEach(eq=>{ cumulByEq[eq.id] += ptsGrid[fid]?.[eq.id]||0; });
+    });
+    const top = ranking.map(eq=>({id:eq.id, pts:cumulByEq[eq.id]})).sort((a,b)=>b.pts-a.pts)[0];
+    if(top) joursPremierMap[top.id] = (joursPremierMap[top.id]||0) + 1;
+  });
+  const joursPremierRanking = ranking
+    .map(eq=>({...eq, jours:joursPremierMap[eq.id]||0}))
+    .filter(eq=>eq.jours>0)
+    .sort((a,b)=>b.jours-a.jours);
+
   // Classement des nations (TOUS joueurs, pas seulement sélectionnés)
   const nationMap = {};
   joueurs.forEach(j=>{
@@ -346,7 +372,7 @@ function process({equipes, fixtures, points, stats, joueurs, equipeJoueurs, bare
   return {equipes, joueurs, fixtures:done, ranking, ptsJ, allPtsJ, ptsGrid,
     totalGoals, totalPts, totalPasses, totalCS,
     matchCount, avgPtsMatch,
-    nationsRanking, equipesByPos,
+    nationsRanking, equipesByPos, joursPremierRanking,
     topPerf, topScore, topCS2, bestF, bestFPts, bestTeam,
     winner, winnerPlayers, bestTeamMatchInfo};
 }
@@ -956,6 +982,50 @@ function sNations(d) {
   };
 }
 
+function sJoursPremier(d) {
+  const top=(d.joursPremierRanking||[]).slice(0,12);
+  if(!top.length) return null;
+  const max=top[0].jours||1;
+  const medals=['👑','🥈','🥉'];
+  const cols=[GOLD,SILVER,BRONZE];
+
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(8px,1.6vw,16px);width:100%;height:100%">
+        <div class="t-eyebrow rv" data-d="0">📅 Le plus de jours en tête</div>
+        <div style="font-size:clamp(.6rem,1.3vw,.78rem);letter-spacing:.12em;text-transform:uppercase;color:rgba(238,242,255,.3)" class="rv" data-d=".1">Nombre de jours passés n°1 du classement général</div>
+        <div class="rv" data-d=".2" style="overflow-y:auto;width:100%;max-width:700px;flex:1;min-height:0">
+          <div style="display:flex;flex-direction:column;gap:clamp(4px,.8vw,8px)">
+            ${top.map((eq,i)=>{
+              const barW=Math.round((eq.jours/max)*100);
+              const isTop3=i<3;
+              return `
+                <div style="display:flex;align-items:center;gap:clamp(8px,1.5vw,14px);
+                  background:rgba(238,242,255,${isTop3?.055:.025});
+                  border:1px solid rgba(238,242,255,${isTop3?.085:.045});
+                  border-radius:10px;padding:clamp(7px,1.3vw,12px) clamp(10px,2vw,18px)">
+                  <div style="font-size:clamp(.9rem,1.8vw,1.2rem);font-weight:700;color:${isTop3?cols[i]:'rgba(238,242,255,.3)'};min-width:1.9rem;text-align:center">
+                    ${isTop3?medals[i]:i+1}
+                  </div>
+                  <div style="flex:1;min-width:0">
+                    <div style="font-size:clamp(.78rem,1.6vw,.95rem);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(eq.nom)}</div>
+                    <div style="margin-top:3px;height:3px;background:rgba(238,242,255,.06);border-radius:2px;overflow:hidden">
+                      <div style="height:100%;width:${barW}%;background:${isTop3?cols[i]:'rgba(238,242,255,.2)'};border-radius:2px"></div>
+                    </div>
+                  </div>
+                  <div style="text-align:right;flex-shrink:0">
+                    <div style="font-family:'Impact','Arial Black',sans-serif;font-size:clamp(1rem,2.5vw,1.5rem);color:${isTop3?cols[i]:'rgba(238,242,255,.7)'};line-height:1">${eq.jours}</div>
+                    <div style="font-size:clamp(.45rem,.85vw,.55rem);letter-spacing:.1em;text-transform:uppercase;color:rgba(238,242,255,.25)">jour${eq.jours>1?'s':''}</div>
+                  </div>
+                </div>`;
+            }).join('')}
+          </div>
+        </div>
+      </div>`,
+    onEnter(el){ reveal(el,80); }
+  };
+}
+
 function sRaceChart(d) {
   if(!d.ranking || d.ranking.length < 2) return null;
   return {
@@ -1190,6 +1260,7 @@ function buildSlides(d) {
     sMentionPos('MIL',d),
     sMentionPos('DEF',d),
     sCompare(d),
+    sJoursPremier(d),
     sOutro(d),
   ].filter(Boolean);
 
