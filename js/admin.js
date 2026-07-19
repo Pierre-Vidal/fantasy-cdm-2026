@@ -385,6 +385,54 @@ async function toggleSiteLock() {
   }
 }
 
+// ── Feedback (device + remarques du palmarès) ─────────────
+async function chargerFeedback() {
+  const statsEl = document.getElementById('feedback-stats');
+  const msgEl   = document.getElementById('feedback-messages');
+  if (!statsEl || !msgEl) return;
+  try {
+    const { total, mobile, desktop, messages } = await adminAction('get_feedback', {});
+    if (total === 0) {
+      statsEl.innerHTML = `<span style="color:var(--muted)">Aucune visite enregistrée pour l'instant.</span>`;
+      msgEl.innerHTML = '';
+      return;
+    }
+    const pctMobile  = Math.round((mobile  / total) * 100);
+    const pctDesktop = Math.round((desktop / total) * 100);
+    statsEl.innerHTML = `
+      <div style="display:flex;gap:8px;margin-bottom:8px">
+        <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:1.1rem;font-weight:800">${total}</div>
+          <div style="font-size:0.65rem;color:var(--muted);text-transform:uppercase">Visites</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:1.1rem;font-weight:800">📱 ${pctMobile}%</div>
+          <div style="font-size:0.65rem;color:var(--muted)">Mobile (${mobile})</div>
+        </div>
+        <div style="flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px;text-align:center">
+          <div style="font-size:1.1rem;font-weight:800">🖥️ ${pctDesktop}%</div>
+          <div style="font-size:0.65rem;color:var(--muted)">Ordinateur (${desktop})</div>
+        </div>
+      </div>
+      <div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden;display:flex">
+        <div style="width:${pctMobile}%;background:var(--accent)"></div>
+        <div style="width:${pctDesktop}%;background:var(--green)"></div>
+      </div>`;
+
+    msgEl.innerHTML = messages.length
+      ? messages.map(m => `
+          <div style="padding:8px 0;border-bottom:1px solid var(--border)33">
+            <div>${esc(m.message)}</div>
+            <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">
+              ${m.device === 'mobile' ? '📱' : '🖥️'} ${new Date(m.created_at).toLocaleDateString('fr-FR')}
+            </div>
+          </div>`).join('')
+      : `<span style="color:var(--muted)">Aucune remarque pour l'instant.</span>`;
+  } catch (e) {
+    statsEl.innerHTML = `<span style="color:var(--red)">Erreur : ${esc(e.message)}</span>`;
+  }
+}
+
 async function chargerBareme() {
   await loadBareme();
   const bareme  = CONFIG.BAREME;
@@ -456,6 +504,7 @@ async function connecterRapide() {
     initEquipeLibre();
     chargerFixturesDone();
     chargerLockStatus();
+    chargerFeedback();
   } catch(e) {
     showToast(e.message, 'error');
     document.getElementById('rapide-panel').style.display = 'none';

@@ -448,6 +448,60 @@ function sMerci(d) {
   };
 }
 
+function sFeedback(d) {
+  return {
+    html:`
+      <div style="display:flex;flex-direction:column;align-items:center;gap:clamp(10px,2vw,18px);max-width:520px;width:100%">
+        <div class="t-eyebrow rv" data-d="0">💬 Ton avis compte</div>
+        <div class="t-serif rv" data-d=".15" style="font-size:clamp(.85rem,2vw,1.15rem);color:rgba(238,242,255,.55)">
+          Une idée d'amélioration ? Une remarque sur le jeu ?
+        </div>
+        <textarea id="feedback-text" rows="4" placeholder="Écris ici… (optionnel)"
+          class="rv" data-d=".3"
+          style="width:100%;background:rgba(238,242,255,.05);border:1px solid rgba(238,242,255,.14);
+            border-radius:12px;padding:12px 14px;color:#eef2ff;font-family:inherit;font-size:.88rem;
+            resize:vertical;outline:none"></textarea>
+        <div class="rv" data-d=".45" style="display:flex;gap:10px;justify-content:center;flex-wrap:wrap">
+          <button onclick="submitFeedback()" id="feedback-submit-btn"
+            style="background:${GOLD};color:#1a1400;border:none;border-radius:999px;padding:10px 24px;
+              font-weight:800;font-size:.85rem;cursor:pointer;font-family:inherit">Envoyer</button>
+          <button onclick="nextSlide()"
+            style="background:transparent;color:rgba(238,242,255,.4);border:1px solid rgba(238,242,255,.14);
+              border-radius:999px;padding:10px 20px;font-size:.85rem;cursor:pointer;font-family:inherit">Passer</button>
+        </div>
+        <div id="feedback-msg" style="font-size:.78rem;color:${GOLD};min-height:1.2em"></div>
+      </div>`,
+    onEnter(el){ reveal(el,80); }
+  };
+}
+
+async function submitFeedback() {
+  const el = document.getElementById('feedback-text');
+  const msgEl = document.getElementById('feedback-msg');
+  const btn = document.getElementById('feedback-submit-btn');
+  const text = (el?.value || '').trim();
+  if (!text) { nextSlide(); return; }
+
+  const feedbackId = localStorage.getItem('feedback_id');
+  btn.disabled = true; btn.style.opacity = '.6';
+  try {
+    if (feedbackId) {
+      const { error } = await db.from('feedback').update({ message: text }).eq('id', feedbackId);
+      if (error) throw error;
+    } else {
+      // Filet de sécurité si l'insertion initiale (arrivée sur la page) a échoué.
+      const device = window.innerWidth < 768 ? 'mobile' : 'desktop';
+      const { error } = await db.from('feedback').insert({ device, message: text });
+      if (error) throw error;
+    }
+    msgEl.textContent = 'Merci pour ton retour ! 🙏';
+    setTimeout(()=>nextSlide(), 1100);
+  } catch (e) {
+    msgEl.textContent = 'Oups, erreur d\'envoi — tu peux passer à la suite.';
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
 function sOutro(d) {
   return {
     html:`
@@ -1261,6 +1315,7 @@ function buildSlides(d) {
     sMentionPos('DEF',d),
     sCompare(d),
     sJoursPremier(d),
+    sFeedback(d),
     sOutro(d),
   ].filter(Boolean);
 
@@ -1345,9 +1400,30 @@ function initNav() {
 // ─────────────────────────────────────────────────────────────
 // Init
 // ─────────────────────────────────────────────────────────────
+// Détecte mobile/desktop et enregistre une ligne de feedback dès l'arrivée
+// sur le palmarès — une seule fois par navigateur (flag localStorage), pour
+// qu'un même visiteur revenant sur la page ne soit jamais compté deux fois.
+async function recordDeviceFeedback() {
+  if (localStorage.getItem('feedback_id')) return; // déjà enregistré ce navigateur
+  const device = window.innerWidth < 768 ? 'mobile' : 'desktop';
+  // UUID généré côté client : la table feedback n'a pas de policy SELECT
+  // (réponses non lisibles publiquement), donc on évite .select() après
+  // l'insert — PostgREST tente sinon de relire la ligne et échoue avec
+  // une erreur RLS trompeuse faute de policy de lecture.
+  const id = crypto.randomUUID();
+  try {
+    const { error } = await db.from('feedback').insert({ id, device });
+    if (error) throw error;
+    localStorage.setItem('feedback_id', id);
+  } catch (e) {
+    // Table pas encore créée ou erreur réseau : on n'empêche jamais l'affichage du palmarès.
+  }
+}
+
 async function init() {
   if (await siteLockGuard()) return;
   localStorage.setItem('palmares_vu', '1'); // évite une redirection ultérieure depuis l'accueil
+  recordDeviceFeedback();
   initStarfield();
   initConfetti();
   initNav();

@@ -120,3 +120,21 @@ CREATE POLICY "public_read" ON points         FOR SELECT USING (true);
 -- Création d'équipe ouverte à tous (inscription)
 CREATE POLICY "public_insert_equipes"        ON equipes        FOR INSERT WITH CHECK (true);
 CREATE POLICY "public_insert_equipe_joueurs" ON equipe_joueurs FOR INSERT WITH CHECK (true);
+
+-- ── Feedback (device + remarques, collecté depuis le palmarès) ─
+CREATE TABLE IF NOT EXISTS feedback (
+  id         UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  device     TEXT CHECK (device IN ('mobile', 'desktop')),
+  message    TEXT,
+  created_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE feedback ENABLE ROW LEVEL SECURITY;
+
+-- Écriture publique (un visiteur crée sa ligne à l'arrivée sur le palmarès,
+-- puis peut la compléter avec un message). Une policy SELECT publique est
+-- nécessaire même si on ne lit jamais depuis le site : PostgREST s'appuie
+-- dessus pour retrouver la ligne ciblée par l'UPDATE (clause WHERE id=...).
+CREATE POLICY "public_insert_feedback" ON feedback FOR INSERT WITH CHECK (true);
+CREATE POLICY "public_update_feedback" ON feedback FOR UPDATE USING (true) WITH CHECK (true);
+CREATE POLICY "public_select_feedback" ON feedback FOR SELECT USING (true);

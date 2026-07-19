@@ -367,6 +367,15 @@ exports.handler = async (event) => {
       return ok({ locked: !!locked });
     }
 
+    // ── Feedback (device + remarques du palmarès) ────────────
+    if (action === 'get_feedback') {
+      const rows = await sbGet('feedback', 'id,device,message,created_at', 'order=created_at.desc');
+      const mobile = rows.filter(r => r.device === 'mobile').length;
+      const desktop = rows.filter(r => r.device === 'desktop').length;
+      const messages = rows.filter(r => r.message?.trim());
+      return ok({ total: rows.length, mobile, desktop, messages });
+    }
+
     return { statusCode: 400, body: JSON.stringify({ error: 'Action inconnue : ' + action }) };
 
   } catch (e) {
