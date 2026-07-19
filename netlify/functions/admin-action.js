@@ -280,7 +280,8 @@ exports.handler = async (event) => {
           const arrets        = s.goalkeeper?.saves || 0;
           const penArrete     = s.penalty?.saved    || 0;
           const penManque     = s.penalty?.missed   || 0;
-          const butsEncaisses = teamGoalsConceded ?? 0;
+          // Un joueur qui n'a pas joué (0 minute) n'a rien encaissé ni gardé propre.
+          const butsEncaisses = minutes > 0 ? (teamGoalsConceded ?? 0) : 0;
           const jaune         = s.cards?.yellow     || 0;
           const rouge         = s.cards?.red        || 0;
           const csc           = s.goals?.owngoals   || 0;

@@ -292,7 +292,8 @@ exports.handler = async function () {
               const arrets        = s.goalkeeper?.saves     || 0;
               const penArrete     = s.penalty?.saved        || 0;
               const penManque     = s.penalty?.missed       || 0;
-              const butsEncaisses = teamGoalsConceded ?? 0;
+              // Un joueur qui n'a pas joué (0 minute) n'a rien encaissé ni gardé propre.
+              const butsEncaisses = minutes > 0 ? (teamGoalsConceded ?? 0) : 0;
               const jaune         = s.cards?.yellow         || 0;
               const rouge         = s.cards?.red            || 0;
               const csc           = s.goals?.owngoals       || 0;
@@ -346,9 +347,10 @@ exports.handler = async function () {
         else if (nation === fixture.away_name) teamGoalsConceded = fixture.home_goals;
       }
 
+      // Un joueur qui n'a pas joué (0 minute) n'a rien encaissé ni gardé propre.
       const correct       = teamGoalsConceded === 0 && stat.minutes >= 60 && (poste === 'GAR' || poste === 'DEF' || poste === 'MIL');
-      const correctEnc    = teamGoalsConceded ?? stat.buts_encaisses;
-      const encChanged    = teamGoalsConceded !== null && correctEnc !== stat.buts_encaisses;
+      const correctEnc    = stat.minutes > 0 ? (teamGoalsConceded ?? stat.buts_encaisses) : 0;
+      const encChanged    = correctEnc !== stat.buts_encaisses;
       if (correct !== stat.clean_sheet || encChanged) {
         stat.clean_sheet      = correct;
         stat.buts_encaisses   = correctEnc;
