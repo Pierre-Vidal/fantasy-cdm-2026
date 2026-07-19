@@ -1386,7 +1386,7 @@ function updateUI() {
 // ─────────────────────────────────────────────────────────────
 function initNav() {
   document.addEventListener('keydown',e=>{
-    if(['ArrowRight','ArrowDown',' '].includes(e.key)){ e.preventDefault(); nextSlide(); }
+    if(['ArrowRight','ArrowDown'].includes(e.key)){ e.preventDefault(); nextSlide(); }
     if(['ArrowLeft','ArrowUp'].includes(e.key)){ e.preventDefault(); prevSlide(); }
   });
   let tx=0;
