@@ -481,6 +481,7 @@ exports.handler = async (event) => {
         ATT: { moins60:1, min60:2, but:4, passe:3, cleanSheet:0, arrets3:0, penArrete:0, penManque:-2, butEnc2:0,  jaune:-1, rouge:-3, csc:-2 },
       };
       const posteById = new Map(joueurRows.map(j => [j.id, j.poste]));
+      const nomById    = new Map(joueurRows.map(j => [j.id, j.nom]));
       const fixture    = fixtures[0];
       if (!fixture) return err('Fixture introuvable en DB');
 
@@ -523,8 +524,11 @@ exports.handler = async (event) => {
 
       const allJoueurIds = new Set([...Object.keys(apiByJoueur).map(Number), ...Object.keys(dbByJoueur).map(Number)]);
       // Delta de points par équipe (equipe_id → delta), uniquement pour les
-      // joueurs qui appartiennent à au moins une équipe fantasy.
-      const deltaByEquipe = {};
+      // joueurs qui appartiennent à au moins une équipe fantasy. detailByEquipe
+      // liste en plus chaque joueur affecté, pour permettre d'afficher le détail
+      // ligne par ligne (quel joueur, combien de points ajoutés/retirés).
+      const deltaByEquipe  = {};
+      const detailByEquipe = {};
       allJoueurIds.forEach(jid => {
         const api   = apiByJoueur[jid];
         const db    = dbByJoueur[jid];
@@ -537,10 +541,18 @@ exports.handler = async (event) => {
         const delta  = ptsApi - ptsDb;
         if (delta === 0) return;
 
-        equipes.forEach(eqId => { deltaByEquipe[eqId] = (deltaByEquipe[eqId] || 0) + delta; });
+        equipes.forEach(eqId => {
+          deltaByEquipe[eqId] = (deltaByEquipe[eqId] || 0) + delta;
+          if (!detailByEquipe[eqId]) detailByEquipe[eqId] = [];
+          detailByEquipe[eqId].push({
+            joueur_id: jid, nom: nomById.get(jid),
+            match: `${fixture.home_name} vs ${fixture.away_name}`,
+            pts_db: ptsDb, pts_api: ptsApi, delta,
+          });
+        });
       });
 
-      return ok({ fixture_id: Number(fixture_id), deltaByEquipe });
+      return ok({ fixture_id: Number(fixture_id), deltaByEquipe, detailByEquipe });
     }
 
     // ── Feedback (device + remarques du palmarès) ────────────

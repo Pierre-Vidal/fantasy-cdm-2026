@@ -443,6 +443,8 @@ async function verifierTousLesMatchs() {
   }
 }
 
+let _rankingDetailByEquipe = {};
+
 async function comparerClassements() {
   const btn = document.getElementById('btn-ranking-impact');
   const progressEl = document.getElementById('ranking-progress');
@@ -457,13 +459,18 @@ async function comparerClassements() {
     ]);
 
     const deltaByEquipe = {};
+    const detailByEquipe = {};
     for (let i = 0; i < fixtures.length; i++) {
       const f = fixtures[i];
       progressEl.textContent = `Simulation ${i + 1}/${fixtures.length} : ${f.home_name} vs ${f.away_name}…`;
       try {
-        const { deltaByEquipe: d } = await adminAction('ranking_impact_fixture', { fixture_id: f.id });
+        const { deltaByEquipe: d, detailByEquipe: det } = await adminAction('ranking_impact_fixture', { fixture_id: f.id });
         Object.entries(d).forEach(([eqId, delta]) => {
           deltaByEquipe[eqId] = (deltaByEquipe[eqId] || 0) + delta;
+        });
+        Object.entries(det || {}).forEach(([eqId, list]) => {
+          if (!detailByEquipe[eqId]) detailByEquipe[eqId] = [];
+          detailByEquipe[eqId].push(...list);
         });
       } catch (e) {
         // Un match en erreur ne doit pas interrompre la simulation globale.
@@ -471,6 +478,7 @@ async function comparerClassements() {
       await new Promise(r => setTimeout(r, 300));
     }
 
+    _rankingDetailByEquipe = detailByEquipe;
     progressEl.textContent = `Terminé — ${fixtures.length} matchs simulés.`;
 
     const simule = classement.map(eq => ({
@@ -488,7 +496,7 @@ async function comparerClassements() {
     }
 
     resultEl.innerHTML = `
-      <div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ ${changes.length} équipe(s) affectée(s) :</div>
+      <div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ ${changes.length} équipe(s) affectée(s) — clique une ligne en gras pour voir le détail :</div>
       <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
         <thead>
           <tr style="border-bottom:1px solid var(--border);text-align:left">
@@ -504,12 +512,19 @@ async function comparerClassements() {
             const rangActuel  = rangActuelById[eq.id];
             const rangChange  = rangCorrige !== rangActuel;
             const delta       = deltaByEquipe[eq.id] || 0;
+            const clickable   = delta !== 0;
             return `
-              <tr style="border-bottom:1px solid var(--border)33;${delta !== 0 ? 'background:rgba(255,255,255,0.03)' : ''}">
+              <tr style="border-bottom:1px solid var(--border)33;${delta !== 0 ? 'background:rgba(255,255,255,0.03);cursor:pointer' : ''}"
+                  ${clickable ? `onclick="toggleDetailEquipe('${eq.id}')"` : ''}>
                 <td style="padding:6px 4px">${rangCorrige}${rangChange ? ` <span style="color:${rangCorrige < rangActuel ? 'var(--green)' : 'var(--red)'}">(${rangActuel})</span>` : ''}</td>
                 <td style="padding:6px 4px">${esc(eq.nom)}${eq.officiel ? ' 🏆' : ''}</td>
                 <td style="padding:6px 4px;text-align:right">${eq.pts}</td>
                 <td style="padding:6px 4px;text-align:right;font-weight:${delta !== 0 ? '700' : '400'}">${eq.pts_corrige}${delta !== 0 ? ` <span style="color:${delta > 0 ? 'var(--green)' : 'var(--red)'}">(${delta > 0 ? '+' : ''}${Math.round(delta*10)/10})</span>` : ''}</td>
+              </tr>
+              <tr id="detail-row-${eq.id}" style="display:none">
+                <td colspan="4" style="padding:0 4px 10px 4px">
+                  <div id="detail-content-${eq.id}"></div>
+                </td>
               </tr>`;
           }).join('')}
         </tbody>
@@ -519,6 +534,27 @@ async function comparerClassements() {
   } finally {
     btn.disabled = false; btn.style.opacity = '1';
   }
+}
+
+function toggleDetailEquipe(equipeId) {
+  const row = document.getElementById(`detail-row-${equipeId}`);
+  const content = document.getElementById(`detail-content-${equipeId}`);
+  if (!row || !content) return;
+
+  const isOpen = row.style.display !== 'none';
+  if (isOpen) { row.style.display = 'none'; return; }
+
+  const detail = _rankingDetailByEquipe[equipeId] || [];
+  content.innerHTML = detail.length
+    ? `<div style="background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:8px;padding:8px 10px">
+        ${detail.map(d => `
+          <div style="padding:4px 0;border-bottom:1px solid var(--border)33;display:flex;justify-content:space-between;gap:8px">
+            <span>${esc(d.nom || d.joueur_id)} <span style="color:var(--muted);font-size:0.72rem">— ${esc(d.match)}</span></span>
+            <span style="white-space:nowrap;font-weight:700;color:${d.delta > 0 ? 'var(--green)' : 'var(--red)'}">${d.pts_db} → ${d.pts_api} (${d.delta > 0 ? '+' : ''}${Math.round(d.delta*10)/10})</span>
+          </div>`).join('')}
+      </div>`
+    : `<span style="color:var(--muted)">Aucun détail disponible.</span>`;
+  row.style.display = 'table-row';
 }
 
 async function chargerFeedback() {
