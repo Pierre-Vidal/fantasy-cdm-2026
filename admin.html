@@ -64,6 +64,14 @@
         <button class="btn btn-primary btn-sm" id="btn-toggle-lock" onclick="toggleSiteLock()">…</button>
       </div>
 
+      <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">✅ Vérification finale des scores</div>
+      <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">
+        Recompare, match par match, les stats stockées en base avec ce que renvoie l'API en ce moment — sans rien modifier. Utile en fin de tournoi pour repérer une stat corrigée après-coup par l'API (but retiré, carton ajouté, etc.).
+      </p>
+      <button class="btn btn-primary btn-sm" id="btn-verif-all" onclick="verifierTousLesMatchs()">🔍 Vérifier tous les matchs</button>
+      <div id="verif-progress" style="font-size:0.78rem;color:var(--muted);margin-top:8px"></div>
+      <div id="verif-result" style="font-size:0.82rem;margin-top:10px;max-height:400px;overflow-y:auto"></div>
+
       <div style="font-size:0.75rem;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;margin-top:20px">💬 Retours des visiteurs</div>
       <p style="font-size:0.78rem;color:var(--muted);margin-bottom:8px">Appareil utilisé et remarques collectées depuis le palmarès.</p>
       <div id="feedback-stats" style="margin-bottom:12px"></div>

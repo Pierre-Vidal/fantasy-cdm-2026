@@ -367,6 +367,69 @@ exports.handler = async (event) => {
       return ok({ locked: !!locked });
     }
 
+    // ── Vérifie les stats d'un match vs l'API, sans rien écrire ─
+    if (action === 'verify_fixture_stats') {
+      const { fixture_id } = params || {};
+      if (!fixture_id) return err('fixture_id manquant');
+      if (!process.env.API_FOOTBALL_KEY) return err('API_FOOTBALL_KEY manquant');
+
+      const [joueurRows, fixtures, dbStatsRows] = await Promise.all([
+        sbGet('joueurs', 'id,nom,poste'),
+        sbGet('fixtures', 'id,home_name,away_name,home_goals,away_goals', `id=eq.${fixture_id}`),
+        sbGet('stats', 'joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc', `fixture_id=eq.${fixture_id}`),
+      ]);
+      const posteById = new Map(joueurRows.map(j => [j.id, j.poste]));
+      const nomById    = new Map(joueurRows.map(j => [j.id, j.nom]));
+      const fixture    = fixtures[0];
+      if (!fixture) return err('Fixture introuvable en DB');
+
+      const playerData = await apiGet('/fixtures/players', { fixture: fixture_id });
+
+      const apiByJoueur = {};
+      playerData.forEach(teamEntry => {
+        const isHomeTeam        = teamEntry.team.name === fixture.home_name;
+        const teamGoalsConceded = isHomeTeam ? (fixture.away_goals ?? null) : (fixture.home_goals ?? null);
+
+        (teamEntry.players || []).forEach(entry => {
+          const p = entry.player;
+          const s = entry.statistics?.[0];
+          if (!s || !p?.id) return;
+          if (!posteById.has(p.id)) return;
+
+          const minutes       = s.games?.minutes    || 0;
+          const poste         = posteById.get(p.id) || MAP_POSTE[s.games?.position] || 'MIL';
+          const butsEncaisses = minutes > 0 ? (teamGoalsConceded ?? 0) : 0;
+          const cleanSheet     = teamGoalsConceded === 0 && minutes >= 60 && (poste === 'GAR' || poste === 'DEF' || poste === 'MIL');
+
+          apiByJoueur[p.id] = {
+            minutes, buts: s.goals?.total || 0, passes: s.goals?.assists || 0,
+            clean_sheet: cleanSheet, arrets: s.goalkeeper?.saves || 0,
+            pen_arrete: (s.penalty?.saved || 0) > 0, pen_manque: (s.penalty?.missed || 0) > 0,
+            buts_encaisses: butsEncaisses, jaune: (s.cards?.yellow || 0) > 0,
+            rouge: (s.cards?.red || 0) > 0, csc: s.goals?.owngoals || 0,
+          };
+        });
+      });
+
+      const FIELDS = ['minutes','buts','passes','clean_sheet','arrets','pen_arrete','pen_manque','buts_encaisses','jaune','rouge','csc'];
+      const dbByJoueur = {};
+      dbStatsRows.forEach(s => { dbByJoueur[s.joueur_id] = s; });
+
+      const allJoueurIds = new Set([...Object.keys(apiByJoueur).map(Number), ...Object.keys(dbByJoueur).map(Number)]);
+      const ecarts = [];
+      allJoueurIds.forEach(jid => {
+        const api = apiByJoueur[jid];
+        const db  = dbByJoueur[jid];
+        if (!api && db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_api', db, api: null }); return; }
+        if (api && !db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_db',  db: null, api }); return; }
+        const diffs = {};
+        FIELDS.forEach(f => { if (api[f] !== db[f]) diffs[f] = { db: db[f], api: api[f] }; });
+        if (Object.keys(diffs).length) ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'diff', diffs });
+      });
+
+      return ok({ fixture_id: Number(fixture_id), checked: allJoueurIds.size, ecarts });
+    }
+
     // ── Feedback (device + remarques du palmarès) ────────────
     if (action === 'get_feedback') {
       const rows = await sbGet('feedback', 'id,device,message,created_at', 'order=created_at.desc');
