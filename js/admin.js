@@ -443,6 +443,84 @@ async function verifierTousLesMatchs() {
   }
 }
 
+async function comparerClassements() {
+  const btn = document.getElementById('btn-ranking-impact');
+  const progressEl = document.getElementById('ranking-progress');
+  const resultEl = document.getElementById('ranking-result');
+  btn.disabled = true; btn.style.opacity = '.6';
+  resultEl.innerHTML = '';
+
+  try {
+    const [{ classement }, { fixtures }] = await Promise.all([
+      adminAction('get_classement_actuel', {}),
+      adminAction('list_fixtures_done', {}),
+    ]);
+
+    const deltaByEquipe = {};
+    for (let i = 0; i < fixtures.length; i++) {
+      const f = fixtures[i];
+      progressEl.textContent = `Simulation ${i + 1}/${fixtures.length} : ${f.home_name} vs ${f.away_name}…`;
+      try {
+        const { deltaByEquipe: d } = await adminAction('ranking_impact_fixture', { fixture_id: f.id });
+        Object.entries(d).forEach(([eqId, delta]) => {
+          deltaByEquipe[eqId] = (deltaByEquipe[eqId] || 0) + delta;
+        });
+      } catch (e) {
+        // Un match en erreur ne doit pas interrompre la simulation globale.
+      }
+      await new Promise(r => setTimeout(r, 300));
+    }
+
+    progressEl.textContent = `Terminé — ${fixtures.length} matchs simulés.`;
+
+    const simule = classement.map(eq => ({
+      ...eq,
+      pts_corrige: Math.round((eq.pts + (deltaByEquipe[eq.id] || 0)) * 10) / 10,
+    })).sort((a, b) => b.pts_corrige - a.pts_corrige);
+
+    const rangActuelById = {};
+    classement.forEach((eq, i) => { rangActuelById[eq.id] = i + 1; });
+
+    const changes = simule.filter(eq => (deltaByEquipe[eq.id] || 0) !== 0);
+    if (!changes.length) {
+      resultEl.innerHTML = `<div style="color:var(--green);font-weight:700">✓ Aucun changement de points, le classement reste identique.</div>`;
+      return;
+    }
+
+    resultEl.innerHTML = `
+      <div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ ${changes.length} équipe(s) affectée(s) :</div>
+      <table style="width:100%;border-collapse:collapse;font-size:0.8rem">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border);text-align:left">
+            <th style="padding:6px 4px">Rang</th>
+            <th style="padding:6px 4px">Équipe</th>
+            <th style="padding:6px 4px;text-align:right">Actuel</th>
+            <th style="padding:6px 4px;text-align:right">Corrigé</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${simule.map((eq, i) => {
+            const rangCorrige = i + 1;
+            const rangActuel  = rangActuelById[eq.id];
+            const rangChange  = rangCorrige !== rangActuel;
+            const delta       = deltaByEquipe[eq.id] || 0;
+            return `
+              <tr style="border-bottom:1px solid var(--border)33;${delta !== 0 ? 'background:rgba(255,255,255,0.03)' : ''}">
+                <td style="padding:6px 4px">${rangCorrige}${rangChange ? ` <span style="color:${rangCorrige < rangActuel ? 'var(--green)' : 'var(--red)'}">(${rangActuel})</span>` : ''}</td>
+                <td style="padding:6px 4px">${esc(eq.nom)}${eq.officiel ? ' 🏆' : ''}</td>
+                <td style="padding:6px 4px;text-align:right">${eq.pts}</td>
+                <td style="padding:6px 4px;text-align:right;font-weight:${delta !== 0 ? '700' : '400'}">${eq.pts_corrige}${delta !== 0 ? ` <span style="color:${delta > 0 ? 'var(--green)' : 'var(--red)'}">(${delta > 0 ? '+' : ''}${Math.round(delta*10)/10})</span>` : ''}</td>
+              </tr>`;
+          }).join('')}
+        </tbody>
+      </table>`;
+  } catch (e) {
+    resultEl.innerHTML = `<span style="color:var(--red)">Erreur : ${esc(e.message)}</span>`;
+  } finally {
+    btn.disabled = false; btn.style.opacity = '1';
+  }
+}
+
 async function chargerFeedback() {
   const statsEl = document.getElementById('feedback-stats');
   const msgEl   = document.getElementById('feedback-messages');

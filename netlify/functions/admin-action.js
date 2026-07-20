@@ -446,6 +446,103 @@ exports.handler = async (event) => {
       return ok({ fixture_id: Number(fixture_id), checked: allJoueurIds.size, ecarts });
     }
 
+    // ── Classement actuel (équipe + total de points) ──────────
+    if (action === 'get_classement_actuel') {
+      const [equipes, pointsRows] = await Promise.all([
+        sbGet('equipes', 'id,nom,officiel'),
+        sbGet('points', 'equipe_id,points'),
+      ]);
+      const totalByEquipe = {};
+      pointsRows.forEach(p => { totalByEquipe[p.equipe_id] = (totalByEquipe[p.equipe_id] || 0) + Number(p.points); });
+      const classement = equipes.map(e => ({
+        id: e.id, nom: e.nom, officiel: e.officiel,
+        pts: Math.round((totalByEquipe[e.id] || 0) * 10) / 10,
+      })).sort((a, b) => b.pts - a.pts);
+      return ok({ classement });
+    }
+
+    // ── Impact des écarts sur le classement, sans rien écrire ──
+    if (action === 'ranking_impact_fixture') {
+      const { fixture_id } = params || {};
+      if (!fixture_id) return err('fixture_id manquant');
+      if (!process.env.API_FOOTBALL_KEY) return err('API_FOOTBALL_KEY manquant');
+
+      const [joueurRows, fixtures, dbStatsRows, baremeRows, equipeJoueurs] = await Promise.all([
+        sbGet('joueurs', 'id,nom,poste'),
+        sbGet('fixtures', 'id,home_name,away_name,home_goals,away_goals', `id=eq.${fixture_id}`),
+        sbGet('stats', 'joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc', `fixture_id=eq.${fixture_id}`),
+        sbGet('config', 'value', 'key=eq.bareme'),
+        sbGet('equipe_joueurs', 'equipe_id,joueur_id'),
+      ]);
+      const bareme = getBareme(baremeRows[0]?.value) || {
+        GAR: { moins60:1, min60:2, but:6, passe:3, cleanSheet:4, arrets3:1, penArrete:5, penManque:-2, butEnc2:-1, jaune:-1, rouge:-3, csc:-2 },
+        DEF: { moins60:1, min60:2, but:6, passe:3, cleanSheet:4, arrets3:0, penArrete:0, penManque:-2, butEnc2:-1, jaune:-1, rouge:-3, csc:-2 },
+        MIL: { moins60:1, min60:2, but:5, passe:3, cleanSheet:1, arrets3:0, penArrete:0, penManque:-2, butEnc2:0,  jaune:-1, rouge:-3, csc:-2 },
+        ATT: { moins60:1, min60:2, but:4, passe:3, cleanSheet:0, arrets3:0, penArrete:0, penManque:-2, butEnc2:0,  jaune:-1, rouge:-3, csc:-2 },
+      };
+      const posteById = new Map(joueurRows.map(j => [j.id, j.poste]));
+      const fixture    = fixtures[0];
+      if (!fixture) return err('Fixture introuvable en DB');
+
+      const ejByJoueur = {};
+      equipeJoueurs.forEach(ej => {
+        if (!ejByJoueur[ej.joueur_id]) ejByJoueur[ej.joueur_id] = [];
+        ejByJoueur[ej.joueur_id].push(ej.equipe_id);
+      });
+
+      const playerData = await apiGet('/fixtures/players', { fixture: fixture_id });
+
+      const apiByJoueur = {};
+      playerData.forEach(teamEntry => {
+        const isHomeTeam        = teamEntry.team.name === fixture.home_name;
+        const teamGoalsConceded = isHomeTeam ? (fixture.away_goals ?? null) : (fixture.home_goals ?? null);
+
+        (teamEntry.players || []).forEach(entry => {
+          const p = entry.player;
+          const s = entry.statistics?.[0];
+          if (!s || !p?.id) return;
+          if (!posteById.has(p.id)) return;
+
+          const minutes       = s.games?.minutes    || 0;
+          const poste         = posteById.get(p.id) || MAP_POSTE[s.games?.position] || 'MIL';
+          const butsEncaisses = minutes > 0 ? (teamGoalsConceded ?? 0) : 0;
+          const cleanSheet     = teamGoalsConceded === 0 && minutes >= 60 && (poste === 'GAR' || poste === 'DEF' || poste === 'MIL');
+
+          apiByJoueur[p.id] = {
+            minutes, buts: s.goals?.total || 0, passes: s.goals?.assists || 0,
+            clean_sheet: cleanSheet, arrets: s.goalkeeper?.saves || 0,
+            pen_arrete: (s.penalty?.saved || 0) > 0, pen_manque: (s.penalty?.missed || 0) > 0,
+            buts_encaisses: butsEncaisses, jaune: (s.cards?.yellow || 0) > 0,
+            rouge: (s.cards?.red || 0) > 0, csc: s.goals?.owngoals || 0,
+          };
+        });
+      });
+
+      const dbByJoueur = {};
+      dbStatsRows.forEach(s => { dbByJoueur[s.joueur_id] = s; });
+
+      const allJoueurIds = new Set([...Object.keys(apiByJoueur).map(Number), ...Object.keys(dbByJoueur).map(Number)]);
+      // Delta de points par équipe (equipe_id → delta), uniquement pour les
+      // joueurs qui appartiennent à au moins une équipe fantasy.
+      const deltaByEquipe = {};
+      allJoueurIds.forEach(jid => {
+        const api   = apiByJoueur[jid];
+        const db    = dbByJoueur[jid];
+        const poste = posteById.get(jid) || 'MIL';
+        const equipes = ejByJoueur[jid] || [];
+        if (!equipes.length) return; // joueur jamais drafté, aucun impact possible
+
+        const ptsApi = api ? calculerPoints(poste, api, bareme).points : 0;
+        const ptsDb  = db  ? calculerPoints(poste, db,  bareme).points : 0;
+        const delta  = ptsApi - ptsDb;
+        if (delta === 0) return;
+
+        equipes.forEach(eqId => { deltaByEquipe[eqId] = (deltaByEquipe[eqId] || 0) + delta; });
+      });
+
+      return ok({ fixture_id: Number(fixture_id), deltaByEquipe });
+    }
+
     // ── Feedback (device + remarques du palmarès) ────────────
     if (action === 'get_feedback') {
       const rows = await sbGet('feedback', 'id,device,message,created_at', 'order=created_at.desc');
