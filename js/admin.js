@@ -422,16 +422,17 @@ async function verifierTousLesMatchs() {
       return;
     }
 
-    resultEl.innerHTML = `<div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ ${allEcarts.length} match(s) avec des écarts :</div>` +
+    resultEl.innerHTML = `<div style="color:var(--red);font-weight:700;margin-bottom:8px">⚠️ ${allEcarts.length} match(s) avec des écarts affectant les points :</div>` +
       allEcarts.map(({ fixture, ecarts }) => `
         <div style="border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:8px">
           <div style="font-weight:700;margin-bottom:6px">[${esc(fixture.round)}] ${esc(fixture.home_name)} vs ${esc(fixture.away_name)} <span style="color:var(--muted);font-weight:400">(fixture ${fixture.id})</span></div>
           ${ecarts.map(e => {
             if (e.type === 'erreur') return `<div style="color:var(--red)">Erreur : ${esc(e.nom)}</div>`;
-            if (e.type === 'absent_api') return `<div>🔸 ${esc(e.nom || e.joueur_id)} — en DB mais absent de l'API désormais</div>`;
-            if (e.type === 'absent_db')  return `<div>🔸 ${esc(e.nom || e.joueur_id)} — dans l'API mais absent de la DB</div>`;
+            const ptsTxt = `<span style="color:var(--muted)">(${e.pts_db} → ${e.pts_api} pts)</span>`;
+            if (e.type === 'absent_api') return `<div>🔸 ${esc(e.nom || e.joueur_id)} — en DB mais absent de l'API désormais ${ptsTxt}</div>`;
+            if (e.type === 'absent_db')  return `<div>🔸 ${esc(e.nom || e.joueur_id)} — dans l'API mais absent de la DB ${ptsTxt}</div>`;
             const diffTxt = Object.entries(e.diffs).map(([k, v]) => `${FIELD_LABELS[k] || k} : ${v.db} → ${v.api}`).join(', ');
-            return `<div>🔸 ${esc(e.nom || e.joueur_id)} — ${esc(diffTxt)}</div>`;
+            return `<div>🔸 ${esc(e.nom || e.joueur_id)} — ${esc(diffTxt)} ${ptsTxt}</div>`;
           }).join('')}
         </div>
       `).join('');

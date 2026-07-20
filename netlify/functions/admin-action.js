@@ -373,11 +373,18 @@ exports.handler = async (event) => {
       if (!fixture_id) return err('fixture_id manquant');
       if (!process.env.API_FOOTBALL_KEY) return err('API_FOOTBALL_KEY manquant');
 
-      const [joueurRows, fixtures, dbStatsRows] = await Promise.all([
+      const [joueurRows, fixtures, dbStatsRows, baremeRows] = await Promise.all([
         sbGet('joueurs', 'id,nom,poste'),
         sbGet('fixtures', 'id,home_name,away_name,home_goals,away_goals', `id=eq.${fixture_id}`),
         sbGet('stats', 'joueur_id,minutes,buts,passes,clean_sheet,arrets,pen_arrete,pen_manque,buts_encaisses,jaune,rouge,csc', `fixture_id=eq.${fixture_id}`),
+        sbGet('config', 'value', 'key=eq.bareme'),
       ]);
+      const bareme = getBareme(baremeRows[0]?.value) || {
+        GAR: { moins60:1, min60:2, but:6, passe:3, cleanSheet:4, arrets3:1, penArrete:5, penManque:-2, butEnc2:-1, jaune:-1, rouge:-3, csc:-2 },
+        DEF: { moins60:1, min60:2, but:6, passe:3, cleanSheet:4, arrets3:0, penArrete:0, penManque:-2, butEnc2:-1, jaune:-1, rouge:-3, csc:-2 },
+        MIL: { moins60:1, min60:2, but:5, passe:3, cleanSheet:1, arrets3:0, penArrete:0, penManque:-2, butEnc2:0,  jaune:-1, rouge:-3, csc:-2 },
+        ATT: { moins60:1, min60:2, but:4, passe:3, cleanSheet:0, arrets3:0, penArrete:0, penManque:-2, butEnc2:0,  jaune:-1, rouge:-3, csc:-2 },
+      };
       const posteById = new Map(joueurRows.map(j => [j.id, j.poste]));
       const nomById    = new Map(joueurRows.map(j => [j.id, j.nom]));
       const fixture    = fixtures[0];
@@ -415,16 +422,25 @@ exports.handler = async (event) => {
       const dbByJoueur = {};
       dbStatsRows.forEach(s => { dbByJoueur[s.joueur_id] = s; });
 
+      // On ne remonte que les écarts qui changent réellement le nombre de
+      // points calculé (ex: minutes 94→90 ne change rien au barème donc on
+      // l'ignore ; un but ou un carton en plus/moins, si).
       const allJoueurIds = new Set([...Object.keys(apiByJoueur).map(Number), ...Object.keys(dbByJoueur).map(Number)]);
       const ecarts = [];
       allJoueurIds.forEach(jid => {
-        const api = apiByJoueur[jid];
-        const db  = dbByJoueur[jid];
-        if (!api && db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_api', db, api: null }); return; }
-        if (api && !db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_db',  db: null, api }); return; }
+        const api   = apiByJoueur[jid];
+        const db    = dbByJoueur[jid];
+        const poste = posteById.get(jid) || 'MIL';
+
+        const ptsApi = api ? calculerPoints(poste, api, bareme).points : 0;
+        const ptsDb  = db  ? calculerPoints(poste, db,  bareme).points : 0;
+        if (ptsApi === ptsDb) return; // aucun impact sur le score, on ignore
+
+        if (!api && db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_api', pts_db: ptsDb, pts_api: 0 }); return; }
+        if (api && !db)  { ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'absent_db',  pts_db: 0, pts_api: ptsApi }); return; }
         const diffs = {};
         FIELDS.forEach(f => { if (api[f] !== db[f]) diffs[f] = { db: db[f], api: api[f] }; });
-        if (Object.keys(diffs).length) ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'diff', diffs });
+        ecarts.push({ joueur_id: jid, nom: nomById.get(jid), type: 'diff', diffs, pts_db: ptsDb, pts_api: ptsApi });
       });
 
       return ok({ fixture_id: Number(fixture_id), checked: allJoueurIds.size, ecarts });
